@@ -192,6 +192,37 @@ pub struct Episode {
     pub episode_num: Option<i64>,
 }
 
+/// Wrapper of `get_short_epg` / `get_simple_data_table` responses.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EpgResponse {
+    #[serde(default)]
+    pub epg_listings: Vec<EpgListing>,
+}
+
+/// One EPG programme. Panels base64-encode `title`/`description`
+/// (see [`de::opt_b64_string`]); timestamps are epoch seconds.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpgListing {
+    #[serde(default, deserialize_with = "de::opt_b64_string")]
+    pub title: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_b64_string")]
+    pub description: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_i64_flex")]
+    pub start_timestamp: Option<i64>,
+    #[serde(default, deserialize_with = "de::opt_i64_flex")]
+    pub stop_timestamp: Option<i64>,
+}
+
+impl EpgListing {
+    /// Whether the programme is airing at `now` (epoch seconds).
+    pub fn is_on_air(&self, now: i64) -> bool {
+        match (self.start_timestamp, self.stop_timestamp) {
+            (Some(start), Some(stop)) => start <= now && now < stop,
+            _ => false,
+        }
+    }
+}
+
 /// Container extension for live playback URLs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StreamFormat {
@@ -348,6 +379,28 @@ mod tests {
         assert!(empty.episodes().is_empty());
         let missing: SeriesInfo = serde_json::from_str(r#"{"info": {}}"#).unwrap();
         assert!(missing.episodes().is_empty());
+    }
+
+    #[test]
+    fn parses_real_short_epg_with_base64_fields() {
+        let response: EpgResponse =
+            serde_json::from_str(include_str!("fixtures/short_epg.json")).unwrap();
+        let listings = &response.epg_listings;
+        assert_eq!(listings.len(), 2);
+        assert_eq!(
+            listings[0].title.as_deref(),
+            Some("Live: The Herd With Colin Cowherd")
+        );
+        assert_eq!(
+            listings[0].description.as_deref(),
+            Some("A thought-provoking journey.")
+        );
+        assert_eq!(listings[0].start_timestamp, Some(1784224800)); // string epoch
+        assert_eq!(listings[1].description, None);
+        // On-air check straddles the first listing's window.
+        assert!(listings[0].is_on_air(1784230000));
+        assert!(!listings[0].is_on_air(1784235600)); // stop is exclusive
+        assert!(!listings[1].is_on_air(1784230000));
     }
 
     #[test]

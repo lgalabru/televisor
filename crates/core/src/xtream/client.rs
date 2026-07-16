@@ -8,8 +8,8 @@ use tracing::debug;
 use url::Url;
 
 use super::types::{
-    AccountSummary, Category, CategoryId, LiveStream, Series, SeriesInfo, StreamFormat, StreamId,
-    VodStream,
+    AccountSummary, Category, CategoryId, EpgListing, EpgResponse, LiveStream, Series, SeriesInfo,
+    StreamFormat, StreamId, VodStream,
 };
 use crate::config::Account;
 use crate::redact::{Redacted, redact_url};
@@ -158,6 +158,37 @@ impl XtreamClient {
         }
         self.get_json("series list", Some("get_series"), &params)
             .await
+    }
+
+    /// Now/next programmes for a live channel (`get_short_epg`).
+    pub async fn short_epg(
+        &self,
+        stream: StreamId,
+        limit: u32,
+    ) -> Result<Vec<EpgListing>, XtreamError> {
+        let response: EpgResponse = self
+            .get_json(
+                "short EPG",
+                Some("get_short_epg"),
+                &[
+                    ("stream_id", &stream.to_string()),
+                    ("limit", &limit.to_string()),
+                ],
+            )
+            .await?;
+        Ok(response.epg_listings)
+    }
+
+    /// Full schedule for a live channel (`get_simple_data_table`).
+    pub async fn full_epg(&self, stream: StreamId) -> Result<Vec<EpgListing>, XtreamError> {
+        let response: EpgResponse = self
+            .get_json(
+                "full EPG",
+                Some("get_simple_data_table"),
+                &[("stream_id", &stream.to_string())],
+            )
+            .await?;
+        Ok(response.epg_listings)
     }
 
     pub async fn series_info(&self, series_id: u64) -> Result<SeriesInfo, XtreamError> {

@@ -85,6 +85,22 @@ pub fn opt_string_flex<'de, D: Deserializer<'de>>(de: D) -> Result<Option<String
         .filter(|s| !s.trim().is_empty()))
 }
 
+/// EPG text fields (`title`, `description`) are base64-encoded on most
+/// panels but sent as plain text on some — decode when it round-trips to
+/// valid UTF-8, otherwise pass the raw value through.
+pub fn opt_b64_string<'de, D: Deserializer<'de>>(de: D) -> Result<Option<String>, D::Error> {
+    use base64::Engine;
+    let Some(raw) = opt_string_flex(de)? else {
+        return Ok(None);
+    };
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(raw.trim())
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .filter(|s| !s.trim().is_empty());
+    Ok(Some(decoded.unwrap_or(raw)))
+}
+
 #[cfg(test)]
 mod tests {
     use serde::Deserialize;
@@ -137,6 +153,24 @@ mod tests {
         assert_eq!(probe(r#"{"text": ""}"#).text, None);
         assert_eq!(probe(r#"{"text": null}"#).text, None);
         assert_eq!(probe(r#"{}"#).text, None);
+    }
+
+    #[test]
+    fn b64_decodes_encoded_and_passes_plain_through() {
+        #[derive(Deserialize)]
+        struct Epg {
+            #[serde(default, deserialize_with = "super::opt_b64_string")]
+            title: Option<String>,
+        }
+        // "Live: The Herd" base64-encoded, as real panels send it.
+        let enc: Epg = serde_json::from_str(r#"{"title": "TGl2ZTogVGhlIEhlcmQ="}"#).unwrap();
+        assert_eq!(enc.title.as_deref(), Some("Live: The Herd"));
+        // Some panels send plain text — passed through unchanged. ("Match of
+        // the Day!" is not valid base64 thanks to spaces/punctuation.)
+        let plain: Epg = serde_json::from_str(r#"{"title": "Match of the Day!"}"#).unwrap();
+        assert_eq!(plain.title.as_deref(), Some("Match of the Day!"));
+        let missing: Epg = serde_json::from_str(r#"{"title": null}"#).unwrap();
+        assert_eq!(missing.title, None);
     }
 
     #[test]

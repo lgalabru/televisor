@@ -9,8 +9,9 @@ use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use crate::tools;
 
 const INSTRUCTIONS: &str = "televisor controls IPTV playback through VLC on the user's machine, \
-covering live TV, movies (VOD), and series. Typical flows: search_channels → play_channel for \
-live TV; search_movies → play_movie for films; search_series → get_series_episodes → \
+covering live TV (with EPG), movies (VOD), and series. Typical flows: search_channels → \
+play_channel for live TV (get_epg shows what's airing now/next on a channel); \
+search_movies → play_movie for films; search_series → get_series_episodes → \
 play_episode for shows. Live TV, movies, and series each have their own category lists. \
 Playback URLs embed the user's panel credentials, so tools launch VLC directly and never \
 return stream URLs; account credentials can only be added via the `televisor account add` CLI.";
@@ -151,6 +152,19 @@ episode doesn't exist the response lists what's available. No stream URL is retu
         Parameters(params): Parameters<tools::play_episode::Params>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         tools::play_episode::run(params).await
+    }
+
+    #[tool(
+        description = "Show what's on a live channel: now/next programmes (or the full schedule \
+with full=true) with titles, descriptions, epoch timestamps, and a now_playing marker. Use this \
+to answer questions like \"what's on X right now\" or to pick a channel before play_channel. \
+Many channels have no guide data — that is normal and doesn't affect playback."
+    )]
+    async fn get_epg(
+        &self,
+        Parameters(params): Parameters<tools::get_epg::Params>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::get_epg::run(params).await
     }
 }
 

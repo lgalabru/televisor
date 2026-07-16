@@ -8,6 +8,7 @@
 //! - No response ever contains a password or a credentialed URL. Playback
 //!   happens by launching VLC locally, not by handing the model a stream URL.
 
+pub mod get_epg;
 pub mod get_series_episodes;
 pub mod get_status;
 pub mod list_accounts;

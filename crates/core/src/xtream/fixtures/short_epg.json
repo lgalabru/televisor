@@ -1,0 +1,24 @@
+{
+  "epg_listings": [
+    {
+      "id": "6136984",
+      "epg_id": "1",
+      "title": "TGl2ZTogVGhlIEhlcmQgV2l0aCBDb2xpbiBDb3doZXJk",
+      "lang": "",
+      "start": "2026-07-16 18:00:00",
+      "end": "2026-07-16 21:00:00",
+      "description": "QSB0aG91Z2h0LXByb3Zva2luZyBqb3VybmV5Lg==",
+      "channel_id": "FoxSports1.us",
+      "start_timestamp": "1784224800",
+      "stop_timestamp": "1784235600",
+      "stream_id": "429586"
+    },
+    {
+      "id": "6136985",
+      "title": "TGl2ZTogRmlyc3QgVGhpbmdzIEZpcnN0",
+      "description": null,
+      "start_timestamp": "1784235600",
+      "stop_timestamp": "1784242800"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ edition.workspace = true
 test-network = []
 
 [dependencies]
+base64.workspace = true
 figment.workspace = true
 jiff.workspace = true
 reqwest.workspace = true

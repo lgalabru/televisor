@@ -1907,6 +1907,7 @@ dependencies = [
 name = "televisor-core"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "dirs",
  "figment",
  "jiff",
