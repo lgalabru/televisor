@@ -12,6 +12,12 @@ pub struct MoviesCommand {
     /// List everything even without a filter (tens of thousands of lines)
     #[clap(long)]
     pub all: bool,
+    /// Show the most recently added first (default 25, see --limit)
+    #[clap(long)]
+    pub recent: bool,
+    /// Max results with --recent
+    #[clap(long, default_value_t = 25)]
+    pub limit: usize,
     /// Include adult-flagged movies
     #[clap(long)]
     pub include_adult: bool,
@@ -40,7 +46,7 @@ impl MoviesCommand {
         .await?;
         let movies = catalog.movies(self.refresh).await?;
 
-        if query.is_empty() && category.is_none() && !self.all {
+        if query.is_empty() && category.is_none() && !self.all && !self.recent {
             println!(
                 "{} movies available — pass a search term, --category, or --all to list them.",
                 movies.len()
@@ -53,7 +59,11 @@ impl MoviesCommand {
             category,
             ..Default::default()
         };
-        let results = catalog::search(&movies, &query, &opts, usize::MAX);
+        let mut results = catalog::search(&movies, &query, &opts, usize::MAX);
+        if self.recent {
+            results.sort_by_key(|m| std::cmp::Reverse(m.added.unwrap_or(0)));
+            results.truncate(self.limit);
+        }
 
         if self.json {
             println!(

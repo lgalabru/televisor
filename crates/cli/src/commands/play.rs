@@ -2,6 +2,7 @@ use clap::Args;
 use televisor_core::Result;
 use televisor_core::catalog::{Catalog, Resolution, ResolveOptions};
 use televisor_core::source::MediaSource;
+use televisor_core::state::{MediaKind, PlayRecord, StateFile, record_play_best_effort};
 use televisor_core::vlc::{self, OpenOptions};
 use televisor_core::xtream::StreamFormat;
 use url::Url;
@@ -11,8 +12,11 @@ use super::CategoryKind;
 #[derive(Args)]
 pub struct PlayCommand {
     /// Name or numeric id (no quotes needed: `televisor play fox sports 1`)
-    #[clap(required = true)]
+    #[clap(required_unless_present = "last")]
     pub query: Vec<String>,
+    /// Replay the most recently played item (see `televisor history`)
+    #[clap(long, conflicts_with_all = ["movie", "series", "at", "id"])]
+    pub last: bool,
     /// Play a movie (VOD) instead of a live channel
     #[clap(long, conflicts_with = "series")]
     pub movie: bool,
@@ -64,6 +68,9 @@ impl PlayCommand {
     pub async fn execute(&self) -> Result<()> {
         let (name, source) = super::client_for(self.account.as_deref())?;
         let catalog = Catalog::new(&source, &name)?;
+        if self.last {
+            return self.play_last(&name, &source, &catalog).await;
+        }
         let query = self.query.join(" ");
         let kind = if self.movie {
             CategoryKind::Vod
@@ -82,16 +89,20 @@ impl PlayCommand {
             ..Default::default()
         };
         if self.movie {
-            self.play_movie(&source, &catalog, &query, &opts).await
+            self.play_movie(&name, &source, &catalog, &query, &opts)
+                .await
         } else if self.series {
-            self.play_episode(&source, &catalog, &query, &opts).await
+            self.play_episode(&name, &source, &catalog, &query, &opts)
+                .await
         } else {
-            self.play_live(&source, &catalog, &query, &opts).await
+            self.play_live(&name, &source, &catalog, &query, &opts)
+                .await
         }
     }
 
     async fn play_live(
         &self,
+        account: &str,
         source: &MediaSource,
         catalog: &Catalog<'_>,
         query: &str,
@@ -132,7 +143,12 @@ impl PlayCommand {
                         stream.name.clone(),
                     ),
                 };
-                self.launch(&url, &title, stream.stream_id.0)
+                self.launch(&url, &title, stream.stream_id.0)?;
+                record_play_best_effort(
+                    account,
+                    PlayRecord::new(MediaKind::Live, stream.stream_id.0, &stream.name, None),
+                );
+                Ok(())
             }
             Resolution::Ambiguous(candidates) => ambiguous(
                 "channels",
@@ -145,6 +161,7 @@ impl PlayCommand {
 
     async fn play_movie(
         &self,
+        account: &str,
         source: &MediaSource,
         catalog: &Catalog<'_>,
         query: &str,
@@ -158,7 +175,17 @@ impl PlayCommand {
                 let url = source
                     .xtream()?
                     .movie_url(movie.stream_id, movie.container_extension.as_deref())?;
-                self.launch(&url, &movie.name, movie.stream_id.0)
+                self.launch(&url, &movie.name, movie.stream_id.0)?;
+                record_play_best_effort(
+                    account,
+                    PlayRecord::new(
+                        MediaKind::Movie,
+                        movie.stream_id.0,
+                        &movie.name,
+                        movie.container_extension.clone(),
+                    ),
+                );
+                Ok(())
             }
             Resolution::Ambiguous(candidates) => ambiguous(
                 "movies",
@@ -171,6 +198,7 @@ impl PlayCommand {
 
     async fn play_episode(
         &self,
+        account: &str,
         source: &MediaSource,
         catalog: &Catalog<'_>,
         query: &str,
@@ -231,7 +259,63 @@ impl PlayCommand {
 
         let url = client.episode_url(episode.id, episode.container_extension.as_deref())?;
         let title = format!("{} {}", show.name, super::episodes::label(episode));
-        self.launch(&url, &title, episode.id)
+        self.launch(&url, &title, episode.id)?;
+        record_play_best_effort(
+            account,
+            PlayRecord::new(
+                MediaKind::Episode,
+                episode.id,
+                &title,
+                episode.container_extension.clone(),
+            ),
+        );
+        Ok(())
+    }
+
+    /// Replay the newest history entry.
+    async fn play_last(
+        &self,
+        account: &str,
+        source: &MediaSource,
+        catalog: &Catalog<'_>,
+    ) -> Result<()> {
+        let file = StateFile::open()?;
+        let Some(record) = file.history(account).first().cloned() else {
+            eprintln!("Nothing in history yet — play something first.");
+            std::process::exit(1);
+        };
+        match record.kind {
+            MediaKind::Live => {
+                self.play_live(
+                    account,
+                    source,
+                    catalog,
+                    &record.id.to_string(),
+                    &ResolveOptions::default(),
+                )
+                .await
+            }
+            MediaKind::Movie => {
+                self.play_movie(
+                    account,
+                    source,
+                    catalog,
+                    &record.id.to_string(),
+                    &ResolveOptions::default(),
+                )
+                .await
+            }
+            MediaKind::Episode => {
+                // Episodes aren't in any catalog — rebuild the URL from the
+                // recorded id + container extension.
+                let url = source
+                    .xtream()?
+                    .episode_url(record.id, record.ext.as_deref())?;
+                self.launch(&url, &record.name, record.id)?;
+                record_play_best_effort(account, record);
+                Ok(())
+            }
+        }
     }
 
     fn launch(&self, url: &Url, title: &str, id: u64) -> Result<()> {

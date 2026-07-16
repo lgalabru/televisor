@@ -12,6 +12,12 @@ pub struct SeriesCommand {
     /// List everything even without a filter (thousands of lines)
     #[clap(long)]
     pub all: bool,
+    /// Show the most recently updated first (default 25, see --limit)
+    #[clap(long)]
+    pub recent: bool,
+    /// Max results with --recent
+    #[clap(long, default_value_t = 25)]
+    pub limit: usize,
     /// Refetch from the panel instead of the local cache
     #[clap(long)]
     pub refresh: bool,
@@ -37,7 +43,7 @@ impl SeriesCommand {
         .await?;
         let series = catalog.series_list(self.refresh).await?;
 
-        if query.is_empty() && category.is_none() && !self.all {
+        if query.is_empty() && category.is_none() && !self.all && !self.recent {
             println!(
                 "{} series available — pass a search term, --category, or --all to list them.",
                 series.len()
@@ -49,7 +55,11 @@ impl SeriesCommand {
             category,
             ..Default::default()
         };
-        let results = catalog::search(&series, &query, &opts, usize::MAX);
+        let mut results = catalog::search(&series, &query, &opts, usize::MAX);
+        if self.recent {
+            results.sort_by_key(|s| std::cmp::Reverse(s.last_modified.unwrap_or(0)));
+            results.truncate(self.limit);
+        }
 
         if self.json {
             println!(

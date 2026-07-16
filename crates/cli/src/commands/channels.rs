@@ -15,6 +15,12 @@ pub struct ChannelsCommand {
     /// Only channels with catch-up/replay archive
     #[clap(long)]
     pub archive: bool,
+    /// Show the most recently added first (default 25, see --limit)
+    #[clap(long)]
+    pub recent: bool,
+    /// Max results with --recent
+    #[clap(long, default_value_t = 25)]
+    pub limit: usize,
     /// Include adult-flagged channels
     #[clap(long)]
     pub include_adult: bool,
@@ -43,7 +49,7 @@ impl ChannelsCommand {
         .await?;
         let streams = catalog.streams(self.refresh).await?;
 
-        if query.is_empty() && category.is_none() && !self.all && !self.archive {
+        if query.is_empty() && category.is_none() && !self.all && !self.archive && !self.recent {
             println!(
                 "{} channels available — pass a search term, --category, or --all to list them.",
                 streams.len()
@@ -59,6 +65,10 @@ impl ChannelsCommand {
         let mut results = catalog::search(&streams, &query, &opts, usize::MAX);
         if self.archive {
             results.retain(|s| s.tv_archive);
+        }
+        if self.recent {
+            results.sort_by_key(|s| std::cmp::Reverse(s.added.unwrap_or(0)));
+            results.truncate(self.limit);
         }
 
         if self.json {

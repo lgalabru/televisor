@@ -178,6 +178,10 @@ pub struct Series {
     release_date_camel: Option<String>,
     #[serde(default, deserialize_with = "de::opt_f64_flex")]
     pub rating: Option<f64>,
+    /// Epoch of the last content change — the closest thing series have to
+    /// an "added" timestamp.
+    #[serde(default, deserialize_with = "de::opt_i64_flex")]
+    pub last_modified: Option<i64>,
 }
 
 impl Series {
