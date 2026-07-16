@@ -34,20 +34,41 @@ televisor channels fox sports        # search 37k+ channels (local cache, ~ms)
 televisor play fox sports 1          # fuzzy-resolve and open in VLC
 televisor play 429586 --fullscreen   # by stream id
 
+televisor guide fox sports 1         # EPG: what's on now/next (--full for the day)
+televisor play bbc one --at "2026-07-15 20:00" --duration 90   # catch-up replay
+televisor channels --archive         # channels with replay (shown as [replay 3d])
+
 televisor movies dune                # search VOD
+televisor movies --recent            # latest additions
+televisor info dune                  # plot, rating, cast, duration, trailer
 televisor play --movie dune          # play a movie
-televisor series breaking bad        # search shows
+televisor series breaking bad        # search shows (--recent for latest)
+televisor info --series 48173        # show details
 televisor episodes 48173             # list a show's episodes
 televisor play --series 48173 -s 1 -e 2   # play S01E02
+
+televisor favorites add fox sports 1 # ★ favorites (add/remove/list)
+televisor history                    # recently played
+televisor play --last                # replay the most recent item
 
 televisor open <url-or-file>         # raw VLC passthrough
 ```
 
-Ambiguous `play` queries print ranked candidates and exit with code 2 — pass a numeric id to disambiguate. Try `--format ts` if a live channel won't play as m3u8. Live TV, movies, and series each have their own `--category` lists.
+Ambiguous `play` queries print ranked candidates and exit with code 2 — pass a numeric id to disambiguate. Try `--format ts` if a live channel won't play as m3u8. Live TV, movies, and series each have their own `--category` lists. Catch-up `--at` times are interpreted in the panel's timezone (`televisor status` shows it).
+
+### Plain M3U providers
+
+If your provider only hands out a playlist URL (no working API), add it with `--m3u`:
+
+```bash
+televisor account add mylist --m3u --host "http://host/get.php?username=u&password=p&type=m3u_plus"
+```
+
+Live TV (search, categories, play, favorites) works from the parsed playlist; VOD, series, EPG, catch-up, and status need a full Xtream login and say so.
 
 ## MCP server (Claude / Codex)
 
-`televisor mcp` serves MCP on stdio with ten tools: `list_accounts`, `get_status`, `list_categories`, `search_channels`, `play_channel`, `search_movies`, `play_movie`, `search_series`, `get_series_episodes`, `play_episode`. Playback launches VLC locally — stream URLs (which embed panel credentials) are never returned to the model, and account credentials can only be managed via the CLI.
+`televisor mcp` serves MCP on stdio with twelve tools: `list_accounts`, `get_status`, `list_categories`, `search_channels` (with archive flags), `play_channel` (live or catch-up via `at`), `get_epg`, `search_movies`, `get_movie_info`, `play_movie`, `search_series`, `get_series_episodes`, `play_episode`. Playback launches VLC locally — stream URLs (which embed panel credentials) are never returned to the model, and account credentials can only be managed via the CLI.
 
 `televisor setup` installs the server into `~/.claude.json` (Claude Code), Claude Desktop, and `~/.codex/config.toml` (Codex) — idempotent, additive, and pointing at the current binary. Manual config, if you prefer:
 
