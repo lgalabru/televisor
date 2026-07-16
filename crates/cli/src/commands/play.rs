@@ -24,6 +24,12 @@ pub struct PlayCommand {
     /// Episode number (with --series)
     #[clap(long, short = 'e', requires = "series")]
     pub episode: Option<i64>,
+    /// Catch-up: replay from "YYYY-MM-DD HH:MM" (panel timezone; archive channels only)
+    #[clap(long, conflicts_with_all = ["movie", "series"])]
+    pub at: Option<String>,
+    /// Catch-up clip length in minutes (with --at)
+    #[clap(long, requires = "at", default_value_t = 120)]
+    pub duration: u32,
     /// Treat the query strictly as an id (for scripts)
     #[clap(long)]
     pub id: bool,
@@ -95,8 +101,37 @@ impl PlayCommand {
         }
         match catalog.resolve(query, opts).await? {
             Resolution::One(stream) => {
-                let url = client.live_stream_url(stream.stream_id, self.format)?;
-                self.launch(&url, &stream.name, stream.stream_id.0)
+                let (url, title) = match &self.at {
+                    Some(at) => {
+                        let start = match televisor_core::xtream::client::timeshift_start(at) {
+                            Ok(start) => start,
+                            Err(message) => {
+                                eprintln!("{message}");
+                                std::process::exit(1);
+                            }
+                        };
+                        if !stream.tv_archive {
+                            eprintln!(
+                                "Note: '{}' doesn't advertise catch-up — trying anyway.",
+                                stream.name
+                            );
+                        } else if let Some(days) = stream.tv_archive_duration {
+                            eprintln!("Archive window: {days} day(s).");
+                        }
+                        let url = client.timeshift_url(
+                            stream.stream_id,
+                            &start,
+                            self.duration,
+                            self.format,
+                        )?;
+                        (url, format!("{} @ {at}", stream.name))
+                    }
+                    None => (
+                        client.live_stream_url(stream.stream_id, self.format)?,
+                        stream.name.clone(),
+                    ),
+                };
+                self.launch(&url, &title, stream.stream_id.0)
             }
             Resolution::Ambiguous(candidates) => ambiguous(
                 "channels",

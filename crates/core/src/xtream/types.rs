@@ -118,6 +118,12 @@ pub struct LiveStream {
     pub is_adult: bool,
     #[serde(default, deserialize_with = "de::opt_i64_flex")]
     pub added: Option<i64>,
+    /// Catch-up/replay available for this channel.
+    #[serde(default, deserialize_with = "de::bool_flex")]
+    pub tv_archive: bool,
+    /// How many days of archive the panel keeps.
+    #[serde(default, deserialize_with = "de::opt_i64_flex")]
+    pub tv_archive_duration: Option<i64>,
 }
 
 /// One entry of `get_vod_streams`. `container_extension` (mkv/mp4/…) is
@@ -327,6 +333,9 @@ mod tests {
             streams[2].category_id,
             Some(CategoryId("99".into())) // numeric category_id
         );
+        assert!(!streams[0].tv_archive); // 0
+        assert!(streams[2].tv_archive); // 1
+        assert_eq!(streams[2].tv_archive_duration, Some(3)); // "3" string
     }
 
     #[test]

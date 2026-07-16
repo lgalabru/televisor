@@ -12,6 +12,9 @@ pub struct ChannelsCommand {
     /// List everything even without a filter (tens of thousands of lines)
     #[clap(long)]
     pub all: bool,
+    /// Only channels with catch-up/replay archive
+    #[clap(long)]
+    pub archive: bool,
     /// Include adult-flagged channels
     #[clap(long)]
     pub include_adult: bool,
@@ -40,7 +43,7 @@ impl ChannelsCommand {
         .await?;
         let streams = catalog.streams(self.refresh).await?;
 
-        if query.is_empty() && category.is_none() && !self.all {
+        if query.is_empty() && category.is_none() && !self.all && !self.archive {
             println!(
                 "{} channels available — pass a search term, --category, or --all to list them.",
                 streams.len()
@@ -53,7 +56,10 @@ impl ChannelsCommand {
             category,
             ..Default::default()
         };
-        let results = catalog::search(&streams, &query, &opts, usize::MAX);
+        let mut results = catalog::search(&streams, &query, &opts, usize::MAX);
+        if self.archive {
+            results.retain(|s| s.tv_archive);
+        }
 
         if self.json {
             println!(
@@ -64,7 +70,12 @@ impl ChannelsCommand {
             println!("No channels matched.");
         } else {
             for stream in &results {
-                println!("{:>10}  {}", stream.stream_id, stream.name);
+                let archive = match (stream.tv_archive, stream.tv_archive_duration) {
+                    (true, Some(days)) => format!("  [replay {days}d]"),
+                    (true, None) => "  [replay]".to_string(),
+                    _ => String::new(),
+                };
+                println!("{:>10}  {}{archive}", stream.stream_id, stream.name);
             }
         }
         Ok(())

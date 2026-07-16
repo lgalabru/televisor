@@ -63,6 +63,18 @@ fn sanitize_ext(ext: Option<&str>) -> &str {
     }
 }
 
+/// Parse a user-supplied catch-up start time ("YYYY-MM-DD HH:MM", `T`
+/// separator also accepted) into the panel's `YYYY-MM-DD:HH-MM` format.
+/// The value is passed through verbatim otherwise — panels interpret it in
+/// their own (server) timezone, so no timezone conversion is attempted.
+pub fn timeshift_start(input: &str) -> Result<String, String> {
+    let normalized = input.trim().replace('T', " ");
+    let parsed: jiff::civil::DateTime = normalized.parse().map_err(|_| {
+        format!("invalid start time '{input}' — expected e.g. \"2026-07-15 20:00\"")
+    })?;
+    Ok(parsed.strftime("%Y-%m-%d:%H-%M").to_string())
+}
+
 pub struct XtreamClient {
     http: reqwest::Client,
     base: Url,
@@ -210,6 +222,35 @@ impl XtreamClient {
         self.media_url("live", stream.0, format.ext())
     }
 
+    /// Catch-up playback URL:
+    /// `/timeshift/USER/PASS/DURATION_MIN/YYYY-MM-DD:HH-MM/ID.EXT`.
+    /// `start` must already be in panel format (see [`timeshift_start`]) and
+    /// is interpreted in the **panel's** timezone (`server_info.timezone`).
+    pub fn timeshift_url(
+        &self,
+        stream: StreamId,
+        start: &str,
+        duration_minutes: u32,
+        format: StreamFormat,
+    ) -> Result<Url, XtreamError> {
+        let mut url = self.base.clone();
+        {
+            let mut path = url
+                .path_segments_mut()
+                .map_err(|_| XtreamError::InvalidHost {
+                    account: self.account.clone(),
+                })?;
+            path.clear()
+                .push("timeshift")
+                .push(&self.username)
+                .push(self.password.expose())
+                .push(&duration_minutes.to_string())
+                .push(start)
+                .push(&format!("{}.{}", stream, format.ext()));
+        }
+        Ok(url)
+    }
+
     /// Playback URL for a movie: `/movie/USER/PASS/ID.EXT`, where EXT is the
     /// `container_extension` from the VOD listing.
     pub fn movie_url(&self, stream: StreamId, ext: Option<&str>) -> Result<Url, XtreamError> {
@@ -328,6 +369,26 @@ mod tests {
             .live_stream_url(StreamId(7), StreamFormat::Ts)
             .unwrap();
         assert!(ts.as_str().ends_with("/7.ts"));
+    }
+
+    #[test]
+    fn timeshift_url_and_start_parsing() {
+        let client = client("http://host.example:8080");
+        let start = timeshift_start("2026-07-15 20:00").unwrap();
+        assert_eq!(start, "2026-07-15:20-00");
+        assert_eq!(
+            timeshift_start("2026-07-15T20:00").unwrap(),
+            "2026-07-15:20-00"
+        );
+        assert!(timeshift_start("yesterday 8pm").is_err());
+
+        let url = client
+            .timeshift_url(StreamId(497001), &start, 120, StreamFormat::M3u8)
+            .unwrap();
+        assert_eq!(
+            url.as_str(),
+            "http://host.example:8080/timeshift/alice/hunter2/120/2026-07-15:20-00/497001.m3u8"
+        );
     }
 
     #[test]

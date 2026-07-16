@@ -71,7 +71,9 @@ impl MediaItem for Series {
     }
 }
 
-const CACHE_VERSION: u32 = 1;
+// v2: LiveStream gained tv_archive fields — old caches would read as
+// archive-less, so force a refetch.
+const CACHE_VERSION: u32 = 2;
 pub const DEFAULT_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Debug, Error)]
@@ -467,6 +469,8 @@ mod tests {
             epg_channel_id: None,
             is_adult: false,
             added: None,
+            tv_archive: false,
+            tv_archive_duration: None,
         }
     }
 
@@ -621,7 +625,10 @@ mod tests {
         let raw = std::fs::read_to_string(&path).unwrap();
         std::fs::write(
             &path,
-            raw.replace("\"cache_version\":1", "\"cache_version\":0"),
+            raw.replace(
+                &format!("\"cache_version\":{CACHE_VERSION}"),
+                "\"cache_version\":0",
+            ),
         )
         .unwrap();
         assert!(read_cache::<Vec<LiveStream>>(&path, DEFAULT_TTL).is_none());

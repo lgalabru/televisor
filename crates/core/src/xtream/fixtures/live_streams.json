@@ -41,6 +41,8 @@
     "is_adult": "1",
     "category_id": 99,
     "category_ids": [99],
-    "custom_sid": null
+    "custom_sid": null,
+    "tv_archive": 1,
+    "tv_archive_duration": "3"
   }
 ]

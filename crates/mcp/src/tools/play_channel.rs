@@ -22,6 +22,14 @@ pub struct Params {
     )]
     #[serde(default)]
     pub format: Option<String>,
+    #[schemars(
+        description = "Catch-up replay start, \"YYYY-MM-DD HH:MM\", interpreted in the PANEL's timezone (get_status → server_info.timezone). Only meaningful for channels with archive=true in search_channels results."
+    )]
+    #[serde(default)]
+    pub at: Option<String>,
+    #[schemars(description = "Catch-up clip length in minutes (with `at`). Default 120.")]
+    #[serde(default)]
+    pub duration_minutes: Option<u32>,
     #[schemars(description = "Start VLC in fullscreen. Default false.")]
     #[serde(default)]
     pub fullscreen: bool,
@@ -72,19 +80,44 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
         Resolution::One(stream) => {
             // The playback URL embeds credentials — it is handed to VLC and
             // never returned to the model.
-            let url = match client.live_stream_url(stream.stream_id, format) {
-                Ok(url) => url,
-                Err(err) => return Ok(super::tool_error(err.to_string())),
+            let (url, title, mode) = match &params.at {
+                Some(at) => {
+                    let start = match televisor_core::xtream::client::timeshift_start(at) {
+                        Ok(start) => start,
+                        Err(message) => return Ok(super::tool_error(message)),
+                    };
+                    if !stream.tv_archive {
+                        return Ok(super::tool_error(format!(
+                            "'{}' has no catch-up archive on this panel. Pick a channel with archive=true from search_channels, or call play_channel without `at` for live playback.",
+                            stream.name
+                        )));
+                    }
+                    let duration = params.duration_minutes.unwrap_or(120);
+                    let url = match client.timeshift_url(stream.stream_id, &start, duration, format)
+                    {
+                        Ok(url) => url,
+                        Err(err) => return Ok(super::tool_error(err.to_string())),
+                    };
+                    (url, format!("{} @ {at}", stream.name), "catch-up")
+                }
+                None => {
+                    let url = match client.live_stream_url(stream.stream_id, format) {
+                        Ok(url) => url,
+                        Err(err) => return Ok(super::tool_error(err.to_string())),
+                    };
+                    (url, stream.name.clone(), "live")
+                }
             };
             let open_opts = OpenOptions {
                 fullscreen: params.fullscreen,
-                title: Some(stream.name.clone()),
+                title: Some(title.clone()),
                 ..Default::default()
             };
             match vlc::open_stream(url.as_str(), &open_opts) {
                 Ok(pid) => Ok(super::tool_json(&serde_json::json!({
-                    "playing": stream.name,
+                    "playing": title,
                     "stream_id": stream.stream_id.0,
+                    "mode": mode,
                     "format": format.ext(),
                     "vlc_pid": pid,
                     "note": "VLC was launched on the user's machine.",

@@ -42,6 +42,10 @@ struct Match {
     stream_id: u64,
     name: String,
     category_id: Option<String>,
+    /// Catch-up replay available (usable with play_channel's `at` param).
+    archive: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    archive_days: Option<i64>,
 }
 
 impl From<&LiveStream> for Match {
@@ -50,6 +54,8 @@ impl From<&LiveStream> for Match {
             stream_id: stream.stream_id.0,
             name: stream.name.clone(),
             category_id: stream.category_id.as_ref().map(|c| c.0.clone()),
+            archive: stream.tv_archive,
+            archive_days: stream.tv_archive_duration.filter(|_| stream.tv_archive),
         }
     }
 }
