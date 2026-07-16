@@ -25,7 +25,8 @@ use rmcp::model::{CallToolResult, Content};
 use serde::Serialize;
 use televisor_core::catalog::Catalog;
 use televisor_core::config::TelevisorConfig;
-use televisor_core::xtream::{CategoryId, XtreamClient};
+use televisor_core::source::MediaSource;
+use televisor_core::xtream::CategoryId;
 
 /// Successful result: the value as pretty JSON text.
 pub(crate) fn tool_json<T: Serialize>(value: &T) -> CallToolResult {
@@ -40,11 +41,11 @@ pub(crate) fn tool_error(message: impl Into<String>) -> CallToolResult {
 
 /// Resolve the account and build a client. Error strings are safe to show
 /// the model: every error type involved redacts credentials by construction.
-pub(crate) fn connect(account: Option<&str>) -> Result<(String, XtreamClient), String> {
+pub(crate) fn connect(account: Option<&str>) -> Result<(String, MediaSource), String> {
     let config = TelevisorConfig::load().map_err(|e| e.to_string())?;
     let (name, account) = config.resolve_account(account).map_err(|e| e.to_string())?;
-    let client = XtreamClient::new(&name, account).map_err(|e| e.to_string())?;
-    Ok((name, client))
+    let source = MediaSource::new(&name, account).map_err(|e| e.to_string())?;
+    Ok((name, source))
 }
 
 /// Resolve an optional live category id-or-name, with a self-correction hint.

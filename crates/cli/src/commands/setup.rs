@@ -100,6 +100,7 @@ impl SetupCommand {
             username,
             password,
             user_agent: None,
+            m3u_url: None,
         };
 
         println!("Verifying credentials against the panel…");

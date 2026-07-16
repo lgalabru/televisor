@@ -24,11 +24,11 @@ pub struct Params {
 }
 
 pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
-    let (name, client) = match super::connect(params.account.as_deref()) {
+    let (name, source) = match super::connect(params.account.as_deref()) {
         Ok(connected) => connected,
         Err(message) => return Ok(super::tool_error(message)),
     };
-    let catalog = match Catalog::new(&client, &name) {
+    let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
         Err(err) => return Ok(super::tool_error(err.to_string())),
     };
@@ -61,6 +61,10 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
         Err(err) => return Ok(super::tool_error(err.to_string())),
     };
 
+    let client = match source.xtream() {
+        Ok(client) => client,
+        Err(err) => return Ok(super::tool_error(err.to_string())),
+    };
     let episodes = match client.series_info(show.series_id).await {
         Ok(info) => info.episodes(),
         Err(err) => return Ok(super::tool_error(err.to_string())),

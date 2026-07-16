@@ -1,8 +1,9 @@
 use clap::Args;
 use televisor_core::Result;
 use televisor_core::catalog::{Catalog, Resolution, ResolveOptions};
+use televisor_core::source::MediaSource;
 use televisor_core::vlc::{self, OpenOptions};
-use televisor_core::xtream::{StreamFormat, XtreamClient};
+use televisor_core::xtream::StreamFormat;
 use url::Url;
 
 use super::CategoryKind;
@@ -61,8 +62,8 @@ pub struct PlayCommand {
 
 impl PlayCommand {
     pub async fn execute(&self) -> Result<()> {
-        let (name, client) = super::client_for(self.account.as_deref())?;
-        let catalog = Catalog::new(&client, &name)?;
+        let (name, source) = super::client_for(self.account.as_deref())?;
+        let catalog = Catalog::new(&source, &name)?;
         let query = self.query.join(" ");
         let kind = if self.movie {
             CategoryKind::Vod
@@ -81,17 +82,17 @@ impl PlayCommand {
             ..Default::default()
         };
         if self.movie {
-            self.play_movie(&client, &catalog, &query, &opts).await
+            self.play_movie(&source, &catalog, &query, &opts).await
         } else if self.series {
-            self.play_episode(&client, &catalog, &query, &opts).await
+            self.play_episode(&source, &catalog, &query, &opts).await
         } else {
-            self.play_live(&client, &catalog, &query, &opts).await
+            self.play_live(&source, &catalog, &query, &opts).await
         }
     }
 
     async fn play_live(
         &self,
-        client: &XtreamClient,
+        source: &MediaSource,
         catalog: &Catalog<'_>,
         query: &str,
         opts: &ResolveOptions,
@@ -118,7 +119,7 @@ impl PlayCommand {
                         } else if let Some(days) = stream.tv_archive_duration {
                             eprintln!("Archive window: {days} day(s).");
                         }
-                        let url = client.timeshift_url(
+                        let url = source.xtream()?.timeshift_url(
                             stream.stream_id,
                             &start,
                             self.duration,
@@ -127,7 +128,7 @@ impl PlayCommand {
                         (url, format!("{} @ {at}", stream.name))
                     }
                     None => (
-                        client.live_stream_url(stream.stream_id, self.format)?,
+                        source.live_stream_url(&stream, self.format)?,
                         stream.name.clone(),
                     ),
                 };
@@ -144,7 +145,7 @@ impl PlayCommand {
 
     async fn play_movie(
         &self,
-        client: &XtreamClient,
+        source: &MediaSource,
         catalog: &Catalog<'_>,
         query: &str,
         opts: &ResolveOptions,
@@ -154,8 +155,9 @@ impl PlayCommand {
         }
         match catalog.resolve_movie(query, opts).await? {
             Resolution::One(movie) => {
-                let url =
-                    client.movie_url(movie.stream_id, movie.container_extension.as_deref())?;
+                let url = source
+                    .xtream()?
+                    .movie_url(movie.stream_id, movie.container_extension.as_deref())?;
                 self.launch(&url, &movie.name, movie.stream_id.0)
             }
             Resolution::Ambiguous(candidates) => ambiguous(
@@ -169,7 +171,7 @@ impl PlayCommand {
 
     async fn play_episode(
         &self,
-        client: &XtreamClient,
+        source: &MediaSource,
         catalog: &Catalog<'_>,
         query: &str,
         opts: &ResolveOptions,
@@ -189,6 +191,7 @@ impl PlayCommand {
             Resolution::NotFound => return not_found("series", query, "televisor series"),
         };
 
+        let client = source.xtream()?;
         let episodes = client.series_info(show.series_id).await?.episodes();
         let (Some(season), Some(episode_num)) = (self.season, self.episode) else {
             // No episode selected — show what's available instead of guessing.

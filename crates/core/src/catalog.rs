@@ -14,9 +14,8 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use tracing::{debug, warn};
 
-use crate::xtream::{
-    Category, CategoryId, LiveStream, Series, VodStream, XtreamClient, XtreamError,
-};
+use crate::source::MediaSource;
+use crate::xtream::{Category, CategoryId, LiveStream, Series, VodStream, XtreamError};
 
 /// Anything findable by id / name / category — live channels, movies, and
 /// series all share one resolution and ranking implementation.
@@ -106,15 +105,15 @@ struct CacheFile<T> {
 
 /// Per-account catalog with transparent caching.
 pub struct Catalog<'a> {
-    client: &'a XtreamClient,
+    source: &'a MediaSource,
     dir: PathBuf,
     ttl: Duration,
 }
 
 impl<'a> Catalog<'a> {
-    pub fn new(client: &'a XtreamClient, account_name: &str) -> Result<Self> {
+    pub fn new(source: &'a MediaSource, account_name: &str) -> Result<Self> {
         Ok(Self {
-            client,
+            source,
             dir: cache_dir()?.join(account_name),
             ttl: DEFAULT_TTL,
         })
@@ -122,7 +121,7 @@ impl<'a> Catalog<'a> {
 
     pub async fn categories(&self, refresh: bool) -> Result<Vec<Category>> {
         self.cached("categories.json", refresh, || async {
-            Ok(self.client.live_categories().await?)
+            Ok(self.source.live_categories().await?)
         })
         .await
         .map(|(data, _)| data)
@@ -130,7 +129,7 @@ impl<'a> Catalog<'a> {
 
     pub async fn vod_categories(&self, refresh: bool) -> Result<Vec<Category>> {
         self.cached("vod_categories.json", refresh, || async {
-            Ok(self.client.vod_categories().await?)
+            Ok(self.source.xtream()?.vod_categories().await?)
         })
         .await
         .map(|(data, _)| data)
@@ -138,7 +137,7 @@ impl<'a> Catalog<'a> {
 
     pub async fn series_categories(&self, refresh: bool) -> Result<Vec<Category>> {
         self.cached("series_categories.json", refresh, || async {
-            Ok(self.client.series_categories().await?)
+            Ok(self.source.xtream()?.series_categories().await?)
         })
         .await
         .map(|(data, _)| data)
@@ -146,7 +145,7 @@ impl<'a> Catalog<'a> {
 
     pub async fn streams(&self, refresh: bool) -> Result<Vec<LiveStream>> {
         self.cached("streams.json", refresh, || async {
-            Ok(self.client.live_streams(None).await?)
+            Ok(self.source.live_streams().await?)
         })
         .await
         .map(|(data, _)| data)
@@ -154,7 +153,7 @@ impl<'a> Catalog<'a> {
 
     pub async fn movies(&self, refresh: bool) -> Result<Vec<VodStream>> {
         self.cached("vod_streams.json", refresh, || async {
-            Ok(self.client.vod_streams(None).await?)
+            Ok(self.source.xtream()?.vod_streams(None).await?)
         })
         .await
         .map(|(data, _)| data)
@@ -162,7 +161,7 @@ impl<'a> Catalog<'a> {
 
     pub async fn series_list(&self, refresh: bool) -> Result<Vec<Series>> {
         self.cached("series.json", refresh, || async {
-            Ok(self.client.series_list(None).await?)
+            Ok(self.source.xtream()?.series_list(None).await?)
         })
         .await
         .map(|(data, _)| data)
@@ -175,7 +174,7 @@ impl<'a> Catalog<'a> {
         opts: &ResolveOptions,
     ) -> Result<Resolution<LiveStream>> {
         self.resolve_media("streams.json", query, opts, || async {
-            Ok(self.client.live_streams(None).await?)
+            Ok(self.source.live_streams().await?)
         })
         .await
     }
@@ -187,7 +186,7 @@ impl<'a> Catalog<'a> {
         opts: &ResolveOptions,
     ) -> Result<Resolution<VodStream>> {
         self.resolve_media("vod_streams.json", query, opts, || async {
-            Ok(self.client.vod_streams(None).await?)
+            Ok(self.source.xtream()?.vod_streams(None).await?)
         })
         .await
     }
@@ -199,7 +198,7 @@ impl<'a> Catalog<'a> {
         opts: &ResolveOptions,
     ) -> Result<Resolution<Series>> {
         self.resolve_media("series.json", query, opts, || async {
-            Ok(self.client.series_list(None).await?)
+            Ok(self.source.xtream()?.series_list(None).await?)
         })
         .await
     }
@@ -471,6 +470,7 @@ mod tests {
             added: None,
             tv_archive: false,
             tv_archive_duration: None,
+            direct_source: None,
         }
     }
 

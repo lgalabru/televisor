@@ -10,8 +10,8 @@ pub struct StatusCommand {
 
 impl StatusCommand {
     pub async fn execute(&self) -> Result<()> {
-        let (name, client) = super::client_for(self.account.as_deref())?;
-        let summary = client.account_info().await?;
+        let (name, source) = super::client_for(self.account.as_deref())?;
+        let summary = source.xtream()?.account_info().await?;
         let user = &summary.user_info;
 
         println!("Account:        {name}");

@@ -124,6 +124,12 @@ pub struct LiveStream {
     /// How many days of archive the panel keeps.
     #[serde(default, deserialize_with = "de::opt_i64_flex")]
     pub tv_archive_duration: Option<i64>,
+    /// Direct playback URL. Xtream panels send `""` here (we build the URL
+    /// from `stream_id` instead); M3U playlist accounts carry the playlist's
+    /// URL, which is the only way to play those entries. May embed
+    /// credentials — never log or expose it unredacted.
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub direct_source: Option<String>,
 }
 
 /// One entry of `get_vod_streams`. `container_extension` (mkv/mp4/…) is

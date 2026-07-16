@@ -18,7 +18,12 @@ impl ListCommand {
             } else {
                 ""
             };
-            println!("{name}{marker}");
+            let kind = if account.m3u_url.is_some() {
+                " [m3u]"
+            } else {
+                ""
+            };
+            println!("{name}{marker}{kind}");
             println!("    host: {}", account.host);
             println!("    user: {}", account.username);
         }

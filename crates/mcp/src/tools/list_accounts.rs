@@ -7,6 +7,8 @@ struct AccountEntry {
     name: String,
     host: String,
     is_default: bool,
+    /// "xtream" (full API) or "m3u" (playlist — live TV only).
+    kind: &'static str,
 }
 
 pub async fn run() -> Result<CallToolResult, rmcp::ErrorData> {
@@ -28,6 +30,11 @@ pub async fn run() -> Result<CallToolResult, rmcp::ErrorData> {
             name: name.clone(),
             host: account.host.clone(),
             is_default: config.default_account.as_deref() == Some(name.as_str()),
+            kind: if account.m3u_url.is_some() {
+                "m3u"
+            } else {
+                "xtream"
+            },
         })
         .collect();
     Ok(super::tool_json(&accounts))

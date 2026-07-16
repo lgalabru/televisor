@@ -17,8 +17,8 @@ pub struct CategoriesCommand {
 
 impl CategoriesCommand {
     pub async fn execute(&self) -> Result<()> {
-        let (name, client) = super::client_for(self.account.as_deref())?;
-        let catalog = Catalog::new(&client, &name)?;
+        let (name, source) = super::client_for(self.account.as_deref())?;
+        let catalog = Catalog::new(&source, &name)?;
         let categories = catalog.categories(self.refresh).await?;
 
         if self.json {

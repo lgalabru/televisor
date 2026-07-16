@@ -13,15 +13,16 @@ pub mod status;
 
 use televisor_core::catalog::{self, CatalogError};
 use televisor_core::config::TelevisorConfig;
-use televisor_core::xtream::{CategoryId, XtreamClient};
+use televisor_core::source::MediaSource;
+use televisor_core::xtream::CategoryId;
 
-/// Resolve the account and build a client — the shared entry point of every
-/// panel-touching command.
-pub(crate) fn client_for(account: Option<&str>) -> televisor_core::Result<(String, XtreamClient)> {
+/// Resolve the account and build its media source (Xtream client or M3U
+/// playlist) — the shared entry point of every panel-touching command.
+pub(crate) fn client_for(account: Option<&str>) -> televisor_core::Result<(String, MediaSource)> {
     let config = TelevisorConfig::load()?;
     let (name, account) = config.resolve_account(account)?;
-    let client = XtreamClient::new(&name, account)?;
-    Ok((name, client))
+    let source = MediaSource::new(&name, account)?;
+    Ok((name, source))
 }
 
 /// Which category list a `--category` flag resolves against.

@@ -29,8 +29,8 @@ pub struct GuideCommand {
 
 impl GuideCommand {
     pub async fn execute(&self) -> Result<()> {
-        let (name, client) = super::client_for(self.account.as_deref())?;
-        let catalog = Catalog::new(&client, &name)?;
+        let (name, source) = super::client_for(self.account.as_deref())?;
+        let catalog = Catalog::new(&source, &name)?;
         let query = self.query.join(" ");
         let category = super::category_for(
             &catalog,
@@ -59,6 +59,7 @@ impl GuideCommand {
             }
         };
 
+        let client = source.xtream()?;
         let listings = if self.full {
             client.full_epg(stream.stream_id).await?
         } else {

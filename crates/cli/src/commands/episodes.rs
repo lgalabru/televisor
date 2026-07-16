@@ -24,8 +24,8 @@ pub struct EpisodesCommand {
 
 impl EpisodesCommand {
     pub async fn execute(&self) -> Result<()> {
-        let (name, client) = super::client_for(self.account.as_deref())?;
-        let catalog = Catalog::new(&client, &name)?;
+        let (name, source) = super::client_for(self.account.as_deref())?;
+        let catalog = Catalog::new(&source, &name)?;
         let query = self.query.join(" ");
         let category = super::category_for(
             &catalog,
@@ -58,7 +58,11 @@ impl EpisodesCommand {
             }
         };
 
-        let episodes = client.series_info(show.series_id).await?.episodes();
+        let episodes = source
+            .xtream()?
+            .series_info(show.series_id)
+            .await?
+            .episodes();
         if self.json {
             println!(
                 "{}",

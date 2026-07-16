@@ -53,11 +53,11 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
             }
         },
     };
-    let (name, client) = match super::connect(params.account.as_deref()) {
+    let (name, source) = match super::connect(params.account.as_deref()) {
         Ok(connected) => connected,
         Err(message) => return Ok(super::tool_error(message)),
     };
-    let catalog = match Catalog::new(&client, &name) {
+    let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
         Err(err) => return Ok(super::tool_error(err.to_string())),
     };
@@ -93,7 +93,9 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                         )));
                     }
                     let duration = params.duration_minutes.unwrap_or(120);
-                    let url = match client.timeshift_url(stream.stream_id, &start, duration, format)
+                    let url = match source
+                        .xtream()
+                        .and_then(|c| c.timeshift_url(stream.stream_id, &start, duration, format))
                     {
                         Ok(url) => url,
                         Err(err) => return Ok(super::tool_error(err.to_string())),
@@ -101,7 +103,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                     (url, format!("{} @ {at}", stream.name), "catch-up")
                 }
                 None => {
-                    let url = match client.live_stream_url(stream.stream_id, format) {
+                    let url = match source.live_stream_url(&stream, format) {
                         Ok(url) => url,
                         Err(err) => return Ok(super::tool_error(err.to_string())),
                     };

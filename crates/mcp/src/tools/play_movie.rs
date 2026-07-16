@@ -26,11 +26,11 @@ pub struct Params {
 }
 
 pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
-    let (name, client) = match super::connect(params.account.as_deref()) {
+    let (name, source) = match super::connect(params.account.as_deref()) {
         Ok(connected) => connected,
         Err(message) => return Ok(super::tool_error(message)),
     };
-    let catalog = match Catalog::new(&client, &name) {
+    let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
         Err(err) => return Ok(super::tool_error(err.to_string())),
     };
@@ -48,7 +48,9 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
         Ok(Resolution::One(movie)) => {
             // The playback URL embeds credentials — handed to VLC, never
             // returned to the model.
-            let url = match client.movie_url(movie.stream_id, movie.container_extension.as_deref())
+            let url = match source
+                .xtream()
+                .and_then(|c| c.movie_url(movie.stream_id, movie.container_extension.as_deref()))
             {
                 Ok(url) => url,
                 Err(err) => return Ok(super::tool_error(err.to_string())),

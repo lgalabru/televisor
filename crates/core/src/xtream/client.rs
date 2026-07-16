@@ -45,6 +45,11 @@ pub enum XtreamError {
 
     #[error("Invalid host URL for account '{account}' — expected e.g. http://host:port")]
     InvalidHost { account: String },
+
+    #[error(
+        "Account '{account}' is a plain M3U playlist account — only live TV is available. VOD, series, EPG, catch-up, and status need a full Xtream login (`televisor account add <name> --host <panel-url>`)"
+    )]
+    M3uOnly { account: String },
 }
 
 impl From<reqwest::Error> for XtreamError {
@@ -351,6 +356,7 @@ mod tests {
             username: "alice".to_string(),
             password: Redacted::new("hunter2"),
             user_agent: None,
+            m3u_url: None,
         }
     }
 
@@ -367,6 +373,7 @@ mod tests {
                 username: "al ice".to_string(),
                 password: Redacted::new("p@ss/w0rd"),
                 user_agent: None,
+                m3u_url: None,
             },
         )
         .unwrap();
@@ -544,6 +551,7 @@ mod network_tests {
                 std::env::var("TELEVISOR_TEST_PASSWORD").expect("TELEVISOR_TEST_PASSWORD"),
             ),
             user_agent: None,
+            m3u_url: None,
         };
         let client = XtreamClient::new("smoke", &account).unwrap();
         let info = client.account_info().await.unwrap();

@@ -23,8 +23,8 @@ pub struct InfoCommand {
 
 impl InfoCommand {
     pub async fn execute(&self) -> Result<()> {
-        let (name, client) = super::client_for(self.account.as_deref())?;
-        let catalog = Catalog::new(&client, &name)?;
+        let (name, source) = super::client_for(self.account.as_deref())?;
+        let catalog = Catalog::new(&source, &name)?;
         let query = self.query.join(" ");
         let opts = ResolveOptions {
             include_adult: self.include_adult,
@@ -75,7 +75,7 @@ impl InfoCommand {
                 std::process::exit(1);
             }
         };
-        let info = client.vod_info(movie.stream_id).await?;
+        let info = source.xtream()?.vod_info(movie.stream_id).await?;
 
         if self.json {
             let combined = serde_json::json!({ "movie": movie, "info": info });

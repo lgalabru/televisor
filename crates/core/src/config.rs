@@ -78,6 +78,10 @@ pub struct Account {
     /// Overrides [`crate::xtream::DEFAULT_USER_AGENT`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_agent: Option<String>,
+    /// Full playlist URL for plain-M3U providers (no JSON API). When set,
+    /// the account is live-TV-only. Embeds credentials — hence `Redacted`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub m3u_url: Option<Redacted>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -116,6 +120,7 @@ impl TelevisorConfig {
                     username,
                     password: Redacted::new(password),
                     user_agent: std::env::var("TELEVISOR_USER_AGENT").ok(),
+                    m3u_url: None,
                 },
             );
             config.env_account = true;
@@ -393,6 +398,7 @@ mod tests {
             username: "alice".to_string(),
             password: Redacted::new("hunter2"),
             user_agent: None,
+            m3u_url: None,
         }
     }
 
