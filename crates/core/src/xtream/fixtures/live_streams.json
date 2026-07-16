@@ -1,0 +1,46 @@
+[
+  {
+    "num": 1,
+    "name": "### WORLD CUP 2026 ###",
+    "stream_type": "live",
+    "stream_id": 2012667,
+    "stream_icon": "https://img.example/logo.gif",
+    "epg_channel_id": "",
+    "added": "1780126664",
+    "is_adult": 0,
+    "category_id": "2343",
+    "category_ids": [2343],
+    "custom_sid": null,
+    "tv_archive": 0,
+    "direct_source": "",
+    "tv_archive_duration": 0
+  },
+  {
+    "num": 2,
+    "name": "US: FOX SPORTS 1",
+    "stream_type": "live",
+    "stream_id": 2012600,
+    "stream_icon": "https://img.example/fs1.jpg",
+    "epg_channel_id": "foxsports1.us",
+    "added": "1780126663",
+    "is_adult": 0,
+    "category_id": "2343",
+    "category_ids": [2343],
+    "custom_sid": null,
+    "tv_archive": 0,
+    "direct_source": "",
+    "tv_archive_duration": 0
+  },
+  {
+    "num": 3,
+    "name": "XX: LATE NIGHT",
+    "stream_type": "live",
+    "stream_id": "555",
+    "epg_channel_id": null,
+    "added": 1780126000,
+    "is_adult": "1",
+    "category_id": 99,
+    "category_ids": [99],
+    "custom_sid": null
+  }
+]
