@@ -1,6 +1,6 @@
 # televisor.sh
 
-IPTV from the terminal: browse Xtream Codes panels and play channels in VLC — as a CLI, or as an MCP server for AI agents.
+IPTV from the terminal: browse Xtream Codes panels and play live TV, movies (VOD), and series in VLC — as a CLI, or as an MCP server for AI agents.
 
 ## Install
 
@@ -33,14 +33,21 @@ televisor categories                 # live categories
 televisor channels fox sports        # search 37k+ channels (local cache, ~ms)
 televisor play fox sports 1          # fuzzy-resolve and open in VLC
 televisor play 429586 --fullscreen   # by stream id
+
+televisor movies dune                # search VOD
+televisor play --movie dune          # play a movie
+televisor series breaking bad        # search shows
+televisor episodes 48173             # list a show's episodes
+televisor play --series 48173 -s 1 -e 2   # play S01E02
+
 televisor open <url-or-file>         # raw VLC passthrough
 ```
 
-Ambiguous `play` queries print ranked candidates and exit with code 2 — pass a stream id to disambiguate. Try `--format ts` if a channel won't play as m3u8.
+Ambiguous `play` queries print ranked candidates and exit with code 2 — pass a numeric id to disambiguate. Try `--format ts` if a live channel won't play as m3u8. Live TV, movies, and series each have their own `--category` lists.
 
 ## MCP server (Claude / Codex)
 
-`televisor mcp` serves MCP on stdio with five tools: `list_accounts`, `get_status`, `list_categories`, `search_channels`, `play_channel`. Playback launches VLC locally — stream URLs (which embed panel credentials) are never returned to the model, and account credentials can only be managed via the CLI.
+`televisor mcp` serves MCP on stdio with ten tools: `list_accounts`, `get_status`, `list_categories`, `search_channels`, `play_channel`, `search_movies`, `play_movie`, `search_series`, `get_series_episodes`, `play_episode`. Playback launches VLC locally — stream URLs (which embed panel credentials) are never returned to the model, and account credentials can only be managed via the CLI.
 
 `televisor setup` installs the server into `~/.claude.json` (Claude Code), Claude Desktop, and `~/.codex/config.toml` (Codex) — idempotent, additive, and pointing at the current binary. Manual config, if you prefer:
 

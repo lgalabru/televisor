@@ -14,7 +14,62 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use tracing::{debug, warn};
 
-use crate::xtream::{Category, CategoryId, LiveStream, XtreamClient, XtreamError};
+use crate::xtream::{
+    Category, CategoryId, LiveStream, Series, VodStream, XtreamClient, XtreamError,
+};
+
+/// Anything findable by id / name / category — live channels, movies, and
+/// series all share one resolution and ranking implementation.
+pub trait MediaItem: Clone {
+    fn media_id(&self) -> u64;
+    fn media_name(&self) -> &str;
+    fn media_category(&self) -> Option<&CategoryId>;
+    fn media_is_adult(&self) -> bool {
+        false
+    }
+}
+
+impl MediaItem for LiveStream {
+    fn media_id(&self) -> u64 {
+        self.stream_id.0
+    }
+    fn media_name(&self) -> &str {
+        &self.name
+    }
+    fn media_category(&self) -> Option<&CategoryId> {
+        self.category_id.as_ref()
+    }
+    fn media_is_adult(&self) -> bool {
+        self.is_adult
+    }
+}
+
+impl MediaItem for VodStream {
+    fn media_id(&self) -> u64 {
+        self.stream_id.0
+    }
+    fn media_name(&self) -> &str {
+        &self.name
+    }
+    fn media_category(&self) -> Option<&CategoryId> {
+        self.category_id.as_ref()
+    }
+    fn media_is_adult(&self) -> bool {
+        self.is_adult
+    }
+}
+
+impl MediaItem for Series {
+    fn media_id(&self) -> u64 {
+        self.series_id
+    }
+    fn media_name(&self) -> &str {
+        &self.name
+    }
+    fn media_category(&self) -> Option<&CategoryId> {
+        self.category_id.as_ref()
+    }
+}
 
 const CACHE_VERSION: u32 = 1;
 pub const DEFAULT_TTL: Duration = Duration::from_secs(24 * 60 * 60);
@@ -71,6 +126,22 @@ impl<'a> Catalog<'a> {
         .map(|(data, _)| data)
     }
 
+    pub async fn vod_categories(&self, refresh: bool) -> Result<Vec<Category>> {
+        self.cached("vod_categories.json", refresh, || async {
+            Ok(self.client.vod_categories().await?)
+        })
+        .await
+        .map(|(data, _)| data)
+    }
+
+    pub async fn series_categories(&self, refresh: bool) -> Result<Vec<Category>> {
+        self.cached("series_categories.json", refresh, || async {
+            Ok(self.client.series_categories().await?)
+        })
+        .await
+        .map(|(data, _)| data)
+    }
+
     pub async fn streams(&self, refresh: bool) -> Result<Vec<LiveStream>> {
         self.cached("streams.json", refresh, || async {
             Ok(self.client.live_streams(None).await?)
@@ -79,19 +150,77 @@ impl<'a> Catalog<'a> {
         .map(|(data, _)| data)
     }
 
-    /// Resolve a user query to a single stream. When a disk-cached catalog
-    /// yields nothing, it is refreshed once and the query retried — panels
-    /// renumber and rename streams routinely.
-    pub async fn resolve(&self, query: &str, opts: &ResolveOptions) -> Result<Resolution> {
-        let (streams, from_cache) = self
-            .cached("streams.json", false, || async {
-                Ok(self.client.live_streams(None).await?)
-            })
-            .await?;
-        let resolution = resolve_in(&streams, query, opts);
+    pub async fn movies(&self, refresh: bool) -> Result<Vec<VodStream>> {
+        self.cached("vod_streams.json", refresh, || async {
+            Ok(self.client.vod_streams(None).await?)
+        })
+        .await
+        .map(|(data, _)| data)
+    }
+
+    pub async fn series_list(&self, refresh: bool) -> Result<Vec<Series>> {
+        self.cached("series.json", refresh, || async {
+            Ok(self.client.series_list(None).await?)
+        })
+        .await
+        .map(|(data, _)| data)
+    }
+
+    /// Resolve a user query to a single live channel. See [`Self::resolve_media`].
+    pub async fn resolve(
+        &self,
+        query: &str,
+        opts: &ResolveOptions,
+    ) -> Result<Resolution<LiveStream>> {
+        self.resolve_media("streams.json", query, opts, || async {
+            Ok(self.client.live_streams(None).await?)
+        })
+        .await
+    }
+
+    /// Resolve a user query to a single movie.
+    pub async fn resolve_movie(
+        &self,
+        query: &str,
+        opts: &ResolveOptions,
+    ) -> Result<Resolution<VodStream>> {
+        self.resolve_media("vod_streams.json", query, opts, || async {
+            Ok(self.client.vod_streams(None).await?)
+        })
+        .await
+    }
+
+    /// Resolve a user query to a single series (show).
+    pub async fn resolve_series(
+        &self,
+        query: &str,
+        opts: &ResolveOptions,
+    ) -> Result<Resolution<Series>> {
+        self.resolve_media("series.json", query, opts, || async {
+            Ok(self.client.series_list(None).await?)
+        })
+        .await
+    }
+
+    /// Shared resolution flow: when a disk-cached catalog yields nothing,
+    /// refresh once and retry — panels renumber and rename entries routinely.
+    async fn resolve_media<T, F, Fut>(
+        &self,
+        file: &str,
+        query: &str,
+        opts: &ResolveOptions,
+        fetch: F,
+    ) -> Result<Resolution<T>>
+    where
+        T: MediaItem + Serialize + DeserializeOwned,
+        F: Fn() -> Fut,
+        Fut: Future<Output = Result<Vec<T>>>,
+    {
+        let (items, from_cache) = self.cached(file, false, &fetch).await?;
+        let resolution = resolve_in(&items, query, opts);
         if matches!(resolution, Resolution::NotFound) && from_cache {
-            debug!(query, "no match in cached catalog — refreshing once");
-            let fresh = self.streams(true).await?;
+            debug!(query, file, "no match in cached catalog — refreshing once");
+            let (fresh, _) = self.cached(file, true, &fetch).await?;
             return Ok(resolve_in(&fresh, query, opts));
         }
         Ok(resolution)
@@ -141,20 +270,20 @@ impl ResolveOptions {
 }
 
 #[derive(Debug)]
-pub enum Resolution {
-    One(LiveStream),
+pub enum Resolution<T> {
+    One(T),
     /// Ranked best-first, capped at `max_candidates`.
-    Ambiguous(Vec<LiveStream>),
+    Ambiguous(Vec<T>),
     NotFound,
 }
 
-/// Pure resolution over an in-memory stream list:
-/// exact stream id → exact normalized name → ranked substring match.
-pub fn resolve_in(streams: &[LiveStream], query: &str, opts: &ResolveOptions) -> Resolution {
+/// Pure resolution over an in-memory item list:
+/// exact id → exact normalized name → ranked substring match.
+pub fn resolve_in<T: MediaItem>(items: &[T], query: &str, opts: &ResolveOptions) -> Resolution<T> {
     // Numeric queries try the id first but fall through to name search — a
     // channel literally named "24" must stay findable by name.
     if let Ok(id) = query.trim().parse::<u64>()
-        && let Some(hit) = streams.iter().find(|s| s.stream_id.0 == id)
+        && let Some(hit) = items.iter().find(|s| s.media_id() == id)
     {
         return Resolution::One(hit.clone());
     }
@@ -162,39 +291,39 @@ pub fn resolve_in(streams: &[LiveStream], query: &str, opts: &ResolveOptions) ->
         return Resolution::NotFound;
     }
 
-    let in_scope = |stream: &&LiveStream| {
-        (opts.include_adult || !stream.is_adult)
+    let in_scope = |item: &&T| {
+        (opts.include_adult || !item.media_is_adult())
             && opts
                 .category
                 .as_ref()
-                .is_none_or(|wanted| stream.category_id.as_ref() == Some(wanted))
+                .is_none_or(|wanted| item.media_category() == Some(wanted))
     };
     let needle = normalize(query);
     if needle.is_empty() {
         return Resolution::NotFound;
     }
 
-    let exact: Vec<&LiveStream> = streams
+    let exact: Vec<&T> = items
         .iter()
         .filter(in_scope)
-        .filter(|s| normalize(&s.name) == needle)
+        .filter(|s| normalize(s.media_name()) == needle)
         .collect();
     if let [only] = exact.as_slice() {
         return Resolution::One((*only).clone());
     }
 
-    let mut matches: Vec<&LiveStream> = streams
+    let mut matches: Vec<&T> = items
         .iter()
         .filter(in_scope)
-        .filter(|s| normalize(&s.name).contains(&needle))
+        .filter(|s| normalize(s.media_name()).contains(&needle))
         .collect();
     match matches.len() {
         0 => Resolution::NotFound,
         1 => Resolution::One(matches[0].clone()),
         _ => {
             matches.sort_by_key(|s| {
-                let name = normalize(&s.name);
-                (!name.starts_with(&needle), name.len(), s.stream_id.0)
+                let name = normalize(s.media_name());
+                (!name.starts_with(&needle), name.len(), s.media_id())
             });
             matches.truncate(opts.cap());
             Resolution::Ambiguous(matches.into_iter().cloned().collect())
@@ -202,29 +331,29 @@ pub fn resolve_in(streams: &[LiveStream], query: &str, opts: &ResolveOptions) ->
     }
 }
 
-/// Substring search used by `televisor channels` and the MCP `search_channels`
-/// tool: same normalization and ranking as [`resolve_in`], but returns all
+/// Substring search used by the CLI listing commands and the MCP search
+/// tools: same normalization and ranking as [`resolve_in`], but returns all
 /// matches (up to `limit`).
-pub fn search(
-    streams: &[LiveStream],
+pub fn search<T: MediaItem>(
+    items: &[T],
     query: &str,
     opts: &ResolveOptions,
     limit: usize,
-) -> Vec<LiveStream> {
+) -> Vec<T> {
     let needle = normalize(query);
-    let mut matches: Vec<&LiveStream> = streams
+    let mut matches: Vec<&T> = items
         .iter()
-        .filter(|s| opts.include_adult || !s.is_adult)
+        .filter(|s| opts.include_adult || !s.media_is_adult())
         .filter(|s| {
             opts.category
                 .as_ref()
-                .is_none_or(|wanted| s.category_id.as_ref() == Some(wanted))
+                .is_none_or(|wanted| s.media_category() == Some(wanted))
         })
-        .filter(|s| needle.is_empty() || normalize(&s.name).contains(&needle))
+        .filter(|s| needle.is_empty() || normalize(s.media_name()).contains(&needle))
         .collect();
     matches.sort_by_key(|s| {
-        let name = normalize(&s.name);
-        (!name.starts_with(&needle), name.len(), s.stream_id.0)
+        let name = normalize(s.media_name());
+        (!name.starts_with(&needle), name.len(), s.media_id())
     });
     matches.truncate(limit);
     matches.into_iter().cloned().collect()

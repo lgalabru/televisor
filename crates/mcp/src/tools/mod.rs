@@ -8,11 +8,16 @@
 //! - No response ever contains a password or a credentialed URL. Playback
 //!   happens by launching VLC locally, not by handing the model a stream URL.
 
+pub mod get_series_episodes;
 pub mod get_status;
 pub mod list_accounts;
 pub mod list_categories;
 pub mod play_channel;
+pub mod play_episode;
+pub mod play_movie;
 pub mod search_channels;
+pub mod search_movies;
+pub mod search_series;
 
 use rmcp::model::{CallToolResult, Content};
 use serde::Serialize;
@@ -40,22 +45,57 @@ pub(crate) fn connect(account: Option<&str>) -> Result<(String, XtreamClient), S
     Ok((name, client))
 }
 
-/// Resolve an optional category id-or-name, with a self-correction hint.
+/// Resolve an optional live category id-or-name, with a self-correction hint.
 pub(crate) async fn category_for(
     catalog: &Catalog<'_>,
     input: Option<&str>,
 ) -> Result<Option<CategoryId>, String> {
-    match input {
-        None => Ok(None),
-        Some(input) => {
-            let categories = catalog.categories(false).await.map_err(|e| e.to_string())?;
-            televisor_core::catalog::resolve_category(&categories, input)
-                .map(Some)
-                .ok_or_else(|| {
-                    format!(
-                        "Category '{input}' not found. Call list_categories and pass one of the returned ids or names."
-                    )
-                })
-        }
-    }
+    let categories = match input {
+        None => return Ok(None),
+        Some(_) => catalog.categories(false).await.map_err(|e| e.to_string())?,
+    };
+    lookup_category(&categories, input.expect("checked above"))
+}
+
+/// Same, against the VOD category list.
+pub(crate) async fn vod_category_for(
+    catalog: &Catalog<'_>,
+    input: Option<&str>,
+) -> Result<Option<CategoryId>, String> {
+    let categories = match input {
+        None => return Ok(None),
+        Some(_) => catalog
+            .vod_categories(false)
+            .await
+            .map_err(|e| e.to_string())?,
+    };
+    lookup_category(&categories, input.expect("checked above"))
+}
+
+/// Same, against the series category list.
+pub(crate) async fn series_category_for(
+    catalog: &Catalog<'_>,
+    input: Option<&str>,
+) -> Result<Option<CategoryId>, String> {
+    let categories = match input {
+        None => return Ok(None),
+        Some(_) => catalog
+            .series_categories(false)
+            .await
+            .map_err(|e| e.to_string())?,
+    };
+    lookup_category(&categories, input.expect("checked above"))
+}
+
+fn lookup_category(
+    categories: &[televisor_core::xtream::Category],
+    input: &str,
+) -> Result<Option<CategoryId>, String> {
+    televisor_core::catalog::resolve_category(categories, input)
+        .map(Some)
+        .ok_or_else(|| {
+            format!(
+                "Category '{input}' not found in this section. Note that live TV, movies, and series each have their own category lists."
+            )
+        })
 }

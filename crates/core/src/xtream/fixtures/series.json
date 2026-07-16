@@ -1,0 +1,22 @@
+[
+  {
+    "num": 1,
+    "name": "4K-NF - Super Subbu (2026) (IN)",
+    "series_id": 48173,
+    "plot": "An unlucky teacher is assigned to teach sex ed in a hostile village.",
+    "genre": "Comedy / Drama",
+    "release_date": "2026-07-02",
+    "rating": "7",
+    "rating_5based": "3.5",
+    "tmdb": "283609",
+    "episode_run_time": "0",
+    "category_id": "427",
+    "category_ids": [427]
+  },
+  {
+    "num": 2,
+    "name": "NF - Breaking Ground",
+    "series_id": "555",
+    "category_id": 12
+  }
+]

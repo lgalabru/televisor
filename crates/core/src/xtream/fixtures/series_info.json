@@ -1,0 +1,38 @@
+{
+  "seasons": [],
+  "info": {
+    "name": "4K-NF - Super Subbu (2026) (IN)",
+    "cover": "https://img.example/cover.jpg"
+  },
+  "episodes": {
+    "2": [
+      {
+        "id": "2066390",
+        "episode_num": 1,
+        "title": "S02E01 - The Return",
+        "container_extension": "mkv",
+        "season": 2,
+        "added": "1783783501",
+        "custom_sid": null
+      }
+    ],
+    "1": [
+      {
+        "id": "2066378",
+        "episode_num": 1,
+        "title": "S01E01 - Subbu S/o Kukku",
+        "container_extension": "mkv",
+        "info": { "duration_secs": 2221, "rating": 0 },
+        "season": 1,
+        "added": "1783783479"
+      },
+      {
+        "id": "2066379",
+        "episode_num": "2",
+        "title": "S01E02 - The Village",
+        "container_extension": "mkv",
+        "season": "1"
+      }
+    ]
+  }
+}

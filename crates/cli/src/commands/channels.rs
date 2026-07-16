@@ -31,8 +31,13 @@ impl ChannelsCommand {
         let (name, client) = super::client_for(self.account.as_deref())?;
         let catalog = Catalog::new(&client, &name)?;
         let query = self.query.join(" ");
-        let category =
-            super::category_for(&catalog, self.category.as_deref(), self.refresh).await?;
+        let category = super::category_for(
+            &catalog,
+            super::CategoryKind::Live,
+            self.category.as_deref(),
+            self.refresh,
+        )
+        .await?;
         let streams = catalog.streams(self.refresh).await?;
 
         if query.is_empty() && category.is_none() && !self.all {

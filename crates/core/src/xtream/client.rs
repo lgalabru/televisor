@@ -7,7 +7,10 @@ use thiserror::Error;
 use tracing::debug;
 use url::Url;
 
-use super::types::{AccountSummary, Category, CategoryId, LiveStream, StreamFormat, StreamId};
+use super::types::{
+    AccountSummary, Category, CategoryId, LiveStream, Series, SeriesInfo, StreamFormat, StreamId,
+    VodStream,
+};
 use crate::config::Account;
 use crate::redact::{Redacted, redact_url};
 
@@ -48,6 +51,15 @@ impl From<reqwest::Error> for XtreamError {
     fn from(err: reqwest::Error) -> Self {
         // reqwest errors Display their URL, which carries ?username=&password=.
         XtreamError::Http(err.without_url())
+    }
+}
+
+/// Container extensions come from the panel and are occasionally missing,
+/// empty, or dot-prefixed; VOD is overwhelmingly mp4/mkv, so default to mp4.
+fn sanitize_ext(ext: Option<&str>) -> &str {
+    match ext.map(|e| e.trim().trim_start_matches('.')) {
+        Some(e) if !e.is_empty() => e,
+        _ => "mp4",
     }
 }
 
@@ -114,6 +126,49 @@ impl XtreamClient {
             .await
     }
 
+    pub async fn vod_categories(&self) -> Result<Vec<Category>, XtreamError> {
+        self.get_json("VOD categories", Some("get_vod_categories"), &[])
+            .await
+    }
+
+    pub async fn vod_streams(
+        &self,
+        category: Option<&CategoryId>,
+    ) -> Result<Vec<VodStream>, XtreamError> {
+        let mut params: Vec<(&str, &str)> = Vec::new();
+        if let Some(category) = category {
+            params.push(("category_id", category.0.as_str()));
+        }
+        self.get_json("VOD streams", Some("get_vod_streams"), &params)
+            .await
+    }
+
+    pub async fn series_categories(&self) -> Result<Vec<Category>, XtreamError> {
+        self.get_json("series categories", Some("get_series_categories"), &[])
+            .await
+    }
+
+    pub async fn series_list(
+        &self,
+        category: Option<&CategoryId>,
+    ) -> Result<Vec<Series>, XtreamError> {
+        let mut params: Vec<(&str, &str)> = Vec::new();
+        if let Some(category) = category {
+            params.push(("category_id", category.0.as_str()));
+        }
+        self.get_json("series list", Some("get_series"), &params)
+            .await
+    }
+
+    pub async fn series_info(&self, series_id: u64) -> Result<SeriesInfo, XtreamError> {
+        self.get_json(
+            "series info",
+            Some("get_series_info"),
+            &[("series_id", &series_id.to_string())],
+        )
+        .await
+    }
+
     /// Playback URL for a live stream. The credentials become path segments,
     /// percent-encoded, so any username/password characters are safe.
     pub fn live_stream_url(
@@ -121,6 +176,21 @@ impl XtreamClient {
         stream: StreamId,
         format: StreamFormat,
     ) -> Result<Url, XtreamError> {
+        self.media_url("live", stream.0, format.ext())
+    }
+
+    /// Playback URL for a movie: `/movie/USER/PASS/ID.EXT`, where EXT is the
+    /// `container_extension` from the VOD listing.
+    pub fn movie_url(&self, stream: StreamId, ext: Option<&str>) -> Result<Url, XtreamError> {
+        self.media_url("movie", stream.0, sanitize_ext(ext))
+    }
+
+    /// Playback URL for a series episode: `/series/USER/PASS/EPISODE_ID.EXT`.
+    pub fn episode_url(&self, episode_id: u64, ext: Option<&str>) -> Result<Url, XtreamError> {
+        self.media_url("series", episode_id, sanitize_ext(ext))
+    }
+
+    fn media_url(&self, prefix: &str, id: u64, ext: &str) -> Result<Url, XtreamError> {
         let mut url = self.base.clone();
         {
             let mut path = url
@@ -129,10 +199,10 @@ impl XtreamClient {
                     account: self.account.clone(),
                 })?;
             path.clear()
-                .push("live")
+                .push(prefix)
                 .push(&self.username)
                 .push(self.password.expose())
-                .push(&format!("{}.{}", stream, format.ext()));
+                .push(&format!("{id}.{ext}"));
         }
         Ok(url)
     }
@@ -227,6 +297,27 @@ mod tests {
             .live_stream_url(StreamId(7), StreamFormat::Ts)
             .unwrap();
         assert!(ts.as_str().ends_with("/7.ts"));
+    }
+
+    #[test]
+    fn movie_and_episode_urls_use_container_extension() {
+        let client = client("http://host.example:8080");
+        let movie = client.movie_url(StreamId(31341), Some("mkv")).unwrap();
+        assert_eq!(
+            movie.as_str(),
+            "http://host.example:8080/movie/alice/hunter2/31341.mkv"
+        );
+        let episode = client.episode_url(2066378, Some(".avi")).unwrap();
+        assert!(
+            episode
+                .as_str()
+                .ends_with("/series/alice/hunter2/2066378.avi")
+        );
+        // Missing/empty extensions default to mp4.
+        let fallback = client.movie_url(StreamId(7), None).unwrap();
+        assert!(fallback.as_str().ends_with("/movie/alice/hunter2/7.mp4"));
+        let empty = client.movie_url(StreamId(7), Some("  ")).unwrap();
+        assert!(empty.as_str().ends_with("/7.mp4"));
     }
 
     #[tokio::test]

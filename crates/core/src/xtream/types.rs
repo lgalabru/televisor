@@ -120,6 +120,78 @@ pub struct LiveStream {
     pub added: Option<i64>,
 }
 
+/// One entry of `get_vod_streams`. `container_extension` (mkv/mp4/…) is
+/// required to build the `/movie/` playback URL.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VodStream {
+    pub stream_id: StreamId,
+    pub name: String,
+    #[serde(default)]
+    pub category_id: Option<CategoryId>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub container_extension: Option<String>,
+    #[serde(default, deserialize_with = "de::bool_flex")]
+    pub is_adult: bool,
+    #[serde(default, deserialize_with = "de::opt_i64_flex")]
+    pub added: Option<i64>,
+}
+
+/// One entry of `get_series` — a show, not a playable stream. Episodes come
+/// from `get_series_info`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Series {
+    #[serde(deserialize_with = "de::u64_flex")]
+    pub series_id: u64,
+    pub name: String,
+    #[serde(default)]
+    pub category_id: Option<CategoryId>,
+}
+
+/// Response of `get_series_info&series_id=X`, slimmed to the episode list.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SeriesInfo {
+    #[serde(default)]
+    episodes: Option<EpisodesRepr>,
+}
+
+/// Panels disagree on the `episodes` shape: most key an object by season
+/// number ("1" → [episodes]), some send an array of per-season arrays.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum EpisodesRepr {
+    Map(std::collections::BTreeMap<String, Vec<Episode>>),
+    List(Vec<Vec<Episode>>),
+}
+
+impl SeriesInfo {
+    /// All episodes flattened, sorted by (season, episode number).
+    pub fn episodes(&self) -> Vec<Episode> {
+        let mut episodes: Vec<Episode> = match &self.episodes {
+            Some(EpisodesRepr::Map(map)) => map.values().flatten().cloned().collect(),
+            Some(EpisodesRepr::List(list)) => list.iter().flatten().cloned().collect(),
+            None => Vec::new(),
+        };
+        episodes.sort_by_key(|e| (e.season, e.episode_num, e.id));
+        episodes
+    }
+}
+
+/// One playable episode. `id` goes into the `/series/` playback URL
+/// (the panel sends it as a string).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Episode {
+    #[serde(deserialize_with = "de::u64_flex")]
+    pub id: u64,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub title: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub container_extension: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_i64_flex")]
+    pub season: Option<i64>,
+    #[serde(default, deserialize_with = "de::opt_i64_flex")]
+    pub episode_num: Option<i64>,
+}
+
 /// Container extension for live playback URLs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StreamFormat {
@@ -224,6 +296,58 @@ mod tests {
             streams[2].category_id,
             Some(CategoryId("99".into())) // numeric category_id
         );
+    }
+
+    #[test]
+    fn parses_real_vod_streams() {
+        let movies: Vec<VodStream> =
+            serde_json::from_str(include_str!("fixtures/vod_streams.json")).unwrap();
+        assert_eq!(movies.len(), 3);
+        assert_eq!(movies[0].stream_id, StreamId(2024998));
+        assert_eq!(movies[0].container_extension.as_deref(), Some("mkv"));
+        assert_eq!(movies[1].stream_id, StreamId(31341)); // string id
+        assert_eq!(movies[1].category_id, Some(CategoryId("92".into()))); // numeric category
+        assert!(movies[2].is_adult); // "1"
+        assert_eq!(movies[2].container_extension, None); // null
+    }
+
+    #[test]
+    fn parses_real_series_list() {
+        let series: Vec<Series> =
+            serde_json::from_str(include_str!("fixtures/series.json")).unwrap();
+        assert_eq!(series.len(), 2);
+        assert_eq!(series[0].series_id, 48173);
+        assert_eq!(series[1].series_id, 555); // string id
+    }
+
+    #[test]
+    fn series_info_episodes_flatten_and_sort() {
+        let info: SeriesInfo =
+            serde_json::from_str(include_str!("fixtures/series_info.json")).unwrap();
+        let episodes = info.episodes();
+        assert_eq!(episodes.len(), 3);
+        // Sorted by (season, episode) even though season 2 came first.
+        assert_eq!(episodes[0].id, 2066378);
+        assert_eq!(episodes[0].season, Some(1));
+        assert_eq!(episodes[1].episode_num, Some(2)); // "2" string
+        assert_eq!(episodes[1].season, Some(1)); // "1" string
+        assert_eq!(episodes[2].season, Some(2));
+    }
+
+    #[test]
+    fn series_info_accepts_array_of_arrays_and_null() {
+        let info: SeriesInfo = serde_json::from_str(
+            r#"{"episodes": [[{"id": "10", "episode_num": 1, "season": 1}], [{"id": 20, "episode_num": 1, "season": 2}]]}"#,
+        )
+        .unwrap();
+        let episodes = info.episodes();
+        assert_eq!(episodes.len(), 2);
+        assert_eq!(episodes[1].id, 20);
+
+        let empty: SeriesInfo = serde_json::from_str(r#"{"episodes": null}"#).unwrap();
+        assert!(empty.episodes().is_empty());
+        let missing: SeriesInfo = serde_json::from_str(r#"{"info": {}}"#).unwrap();
+        assert!(missing.episodes().is_empty());
     }
 
     #[test]

@@ -24,10 +24,16 @@ enum Command {
     Setup(commands::setup::SetupCommand),
     /// Open a raw stream URL or file in VLC
     Open(commands::open::OpenCommand),
-    /// Resolve a channel by name or id and play it in VLC
+    /// Resolve a channel, movie (--movie), or episode (--series) and play it in VLC
     Play(commands::play::PlayCommand),
     /// List or search live channels
     Channels(commands::channels::ChannelsCommand),
+    /// List or search movies (VOD)
+    Movies(commands::movies::MoviesCommand),
+    /// List or search series (shows)
+    Series(commands::series::SeriesCommand),
+    /// List a series' episodes
+    Episodes(commands::episodes::EpisodesCommand),
     /// List live categories
     Categories(commands::categories::CategoriesCommand),
     /// Show account status (expiry, connections)
@@ -78,6 +84,9 @@ async fn main() {
         Command::Open(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Play(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Channels(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
+        Command::Movies(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
+        Command::Series(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
+        Command::Episodes(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Categories(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Status(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Account(cmd) => cmd.execute().await.map_err(|e| e.to_string()),

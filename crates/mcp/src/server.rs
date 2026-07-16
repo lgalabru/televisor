@@ -8,8 +8,10 @@ use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 
 use crate::tools;
 
-const INSTRUCTIONS: &str = "televisor controls IPTV playback through VLC on the user's machine. \
-Typical flow: search_channels to find a channel, then play_channel with its stream_id. \
+const INSTRUCTIONS: &str = "televisor controls IPTV playback through VLC on the user's machine, \
+covering live TV, movies (VOD), and series. Typical flows: search_channels → play_channel for \
+live TV; search_movies → play_movie for films; search_series → get_series_episodes → \
+play_episode for shows. Live TV, movies, and series each have their own category lists. \
 Playback URLs embed the user's panel credentials, so tools launch VLC directly and never \
 return stream URLs; account credentials can only be added via the `televisor account add` CLI.";
 
@@ -89,6 +91,66 @@ stream URL is returned. If the user reports no video, retry once with format=\"t
         Parameters(params): Parameters<tools::play_channel::Params>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         tools::play_channel::run(params).await
+    }
+
+    #[tool(
+        description = "Search movies (VOD) by name substring, optionally scoped to a VOD \
+category. Returns ranked matches with stream_ids plus the total match count. This is the \
+discovery step before play_movie. Results come from a local cache (~24h TTL)."
+    )]
+    async fn search_movies(
+        &self,
+        Parameters(params): Parameters<tools::search_movies::Params>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::search_movies::run(params).await
+    }
+
+    #[tool(
+        description = "Play a movie in VLC on the user's machine (numeric stream_id from \
+search_movies preferred, or a name to fuzzy-match). On an ambiguous name the response lists \
+candidate stream_ids — pick one and call again. No stream URL is returned."
+    )]
+    async fn play_movie(
+        &self,
+        Parameters(params): Parameters<tools::play_movie::Params>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::play_movie::run(params).await
+    }
+
+    #[tool(
+        description = "Search series (TV shows) by name substring, optionally scoped to a \
+series category. Returns ranked matches with series_ids. A series is not directly playable — \
+follow up with get_series_episodes, then play_episode."
+    )]
+    async fn search_series(
+        &self,
+        Parameters(params): Parameters<tools::search_series::Params>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::search_series::run(params).await
+    }
+
+    #[tool(
+        description = "List a series' episodes (season + episode numbers and titles), \
+resolved from a series_id (preferred) or show name. Call this between search_series and \
+play_episode to know which seasons/episodes exist."
+    )]
+    async fn get_series_episodes(
+        &self,
+        Parameters(params): Parameters<tools::get_series_episodes::Params>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::get_series_episodes::run(params).await
+    }
+
+    #[tool(
+        description = "Play one episode of a series in VLC on the user's machine. Takes the \
+series (series_id preferred, or name), a season number, and an episode number. If the \
+episode doesn't exist the response lists what's available. No stream URL is returned."
+    )]
+    async fn play_episode(
+        &self,
+        Parameters(params): Parameters<tools::play_episode::Params>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::play_episode::run(params).await
     }
 }
 
