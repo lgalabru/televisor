@@ -33,11 +33,27 @@ fn default_max_results() -> usize {
     20
 }
 
+fn truncate(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        text.to_string()
+    } else {
+        let cut: String = text.chars().take(max_chars).collect();
+        format!("{cut}…")
+    }
+}
+
 #[derive(Serialize)]
 struct Match {
     series_id: u64,
     name: String,
     category_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rating: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    genre: Option<String>,
+    /// First ~200 chars — call the CLI or a richer tool for the full plot.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    plot: Option<String>,
 }
 
 pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
@@ -70,6 +86,9 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
             series_id: s.series_id,
             name: s.name.clone(),
             category_id: s.category_id.as_ref().map(|c| c.0.clone()),
+            rating: s.rating,
+            genre: s.genre.clone(),
+            plot: s.plot.as_ref().map(|p| truncate(p, 200)),
         })
         .collect();
 

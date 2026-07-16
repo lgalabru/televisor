@@ -7,5 +7,5 @@ pub mod types;
 pub use client::{DEFAULT_USER_AGENT, XtreamClient, XtreamError};
 pub use types::{
     AccountSummary, Category, CategoryId, EpgListing, Episode, LiveStream, Series, SeriesInfo,
-    ServerInfo, StreamFormat, StreamId, UserInfo, VodStream,
+    ServerInfo, StreamFormat, StreamId, UserInfo, VodInfo, VodStream,
 };

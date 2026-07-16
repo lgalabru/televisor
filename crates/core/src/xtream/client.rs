@@ -9,7 +9,7 @@ use url::Url;
 
 use super::types::{
     AccountSummary, Category, CategoryId, EpgListing, EpgResponse, LiveStream, Series, SeriesInfo,
-    StreamFormat, StreamId, VodStream,
+    StreamFormat, StreamId, VodInfo, VodInfoResponse, VodStream,
 };
 use crate::config::Account;
 use crate::redact::{Redacted, redact_url};
@@ -201,6 +201,18 @@ impl XtreamClient {
             )
             .await?;
         Ok(response.epg_listings)
+    }
+
+    /// Movie detail (`get_vod_info`) — plot, cast, genre, rating, duration.
+    pub async fn vod_info(&self, vod_id: StreamId) -> Result<VodInfo, XtreamError> {
+        let response: VodInfoResponse = self
+            .get_json(
+                "VOD info",
+                Some("get_vod_info"),
+                &[("vod_id", &vod_id.to_string())],
+            )
+            .await?;
+        Ok(response.info.unwrap_or_default())
     }
 
     pub async fn series_info(&self, series_id: u64) -> Result<SeriesInfo, XtreamError> {

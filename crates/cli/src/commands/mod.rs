@@ -3,6 +3,7 @@ pub mod categories;
 pub mod channels;
 pub mod episodes;
 pub mod guide;
+pub mod info;
 pub mod movies;
 pub mod open;
 pub mod play;

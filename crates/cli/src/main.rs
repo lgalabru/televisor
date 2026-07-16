@@ -36,6 +36,8 @@ enum Command {
     Episodes(commands::episodes::EpisodesCommand),
     /// Show what's on a channel (EPG now/next or full schedule)
     Guide(commands::guide::GuideCommand),
+    /// Show details for a movie or series (plot, rating, cast, …)
+    Info(commands::info::InfoCommand),
     /// List live categories
     Categories(commands::categories::CategoriesCommand),
     /// Show account status (expiry, connections)
@@ -90,6 +92,7 @@ async fn main() {
         Command::Series(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Episodes(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Guide(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
+        Command::Info(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Categories(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Status(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
         Command::Account(cmd) => cmd.execute().await.map_err(|e| e.to_string()),

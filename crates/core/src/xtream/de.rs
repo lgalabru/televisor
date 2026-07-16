@@ -57,6 +57,18 @@ pub fn opt_i64_flex<'de, D: Deserializer<'de>>(de: D) -> Result<Option<i64>, D::
     Ok(value.as_ref().and_then(Flex::as_i64))
 }
 
+/// Number or numeric string → `f64` (ratings like `4` vs `"7.618"`).
+/// `null`, `""`, or garbage → `None`.
+pub fn opt_f64_flex<'de, D: Deserializer<'de>>(de: D) -> Result<Option<f64>, D::Error> {
+    let value = Option::<Flex>::deserialize(de)?;
+    Ok(value.as_ref().and_then(|flex| match flex {
+        Flex::Num(n) => Some(*n as f64),
+        Flex::Float(f) => Some(*f),
+        Flex::Bool(_) => None,
+        Flex::Str(s) => s.trim().parse::<f64>().ok(),
+    }))
+}
+
 /// Number or numeric string → `u64`. Errors on missing/negative/garbage —
 /// used for identifiers that must exist (e.g. `stream_id`).
 pub fn u64_flex<'de, D: Deserializer<'de>>(de: D) -> Result<u64, D::Error> {

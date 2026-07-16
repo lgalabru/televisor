@@ -71,9 +71,9 @@ impl MediaItem for Series {
     }
 }
 
-// v2: LiveStream gained tv_archive fields — old caches would read as
-// archive-less, so force a refetch.
-const CACHE_VERSION: u32 = 2;
+// v2: LiveStream gained tv_archive fields; v3: VodStream/Series gained
+// rating/plot/genre. Old caches would read as metadata-less — force refetch.
+const CACHE_VERSION: u32 = 3;
 pub const DEFAULT_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Debug, Error)]

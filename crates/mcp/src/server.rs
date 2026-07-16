@@ -119,6 +119,18 @@ candidate stream_ids — pick one and call again. No stream URL is returned."
     }
 
     #[tool(
+        description = "Full details for one movie: plot, genre, rating, duration, director, \
+cast, release date, trailer. Use after search_movies when the user is choosing what to watch \
+(e.g. \"is it any good?\", \"what's it about?\")."
+    )]
+    async fn get_movie_info(
+        &self,
+        Parameters(params): Parameters<tools::get_movie_info::Params>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::get_movie_info::run(params).await
+    }
+
+    #[tool(
         description = "Search series (TV shows) by name substring, optionally scoped to a \
 series category. Returns ranked matches with series_ids. A series is not directly playable — \
 follow up with get_series_episodes, then play_episode."

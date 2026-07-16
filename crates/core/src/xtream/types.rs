@@ -136,6 +136,9 @@ pub struct VodStream {
     pub category_id: Option<CategoryId>,
     #[serde(default, deserialize_with = "de::opt_string_flex")]
     pub container_extension: Option<String>,
+    /// 0–10 scale; panels send it as string or number.
+    #[serde(default, deserialize_with = "de::opt_f64_flex")]
+    pub rating: Option<f64>,
     #[serde(default, deserialize_with = "de::bool_flex")]
     pub is_adult: bool,
     #[serde(default, deserialize_with = "de::opt_i64_flex")]
@@ -151,6 +154,79 @@ pub struct Series {
     pub name: String,
     #[serde(default)]
     pub category_id: Option<CategoryId>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub plot: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub genre: Option<String>,
+    // Panels send BOTH `release_date` and `releaseDate` in one object, so a
+    // serde alias would hit a duplicate-field error — model both and merge
+    // via [`Series::released`].
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub release_date: Option<String>,
+    #[serde(
+        default,
+        rename = "releaseDate",
+        deserialize_with = "de::opt_string_flex",
+        skip_serializing
+    )]
+    release_date_camel: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_f64_flex")]
+    pub rating: Option<f64>,
+}
+
+impl Series {
+    /// Release date, whichever spelling the panel used.
+    pub fn released(&self) -> Option<&str> {
+        self.release_date
+            .as_deref()
+            .or(self.release_date_camel.as_deref())
+    }
+}
+
+/// Response of `get_vod_info&vod_id=X`, slimmed to the metadata block.
+#[derive(Debug, Clone, Deserialize)]
+pub struct VodInfoResponse {
+    #[serde(default)]
+    pub info: Option<VodInfo>,
+}
+
+/// Movie detail from `get_vod_info`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct VodInfo {
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub plot: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub genre: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub cast: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub director: Option<String>,
+    /// "HH:MM:SS" as sent by the panel.
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub duration: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_f64_flex")]
+    pub rating: Option<f64>,
+    // Same duplicate-spelling hazard as `Series::release_date`.
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub releasedate: Option<String>,
+    #[serde(
+        default,
+        rename = "release_date",
+        deserialize_with = "de::opt_string_flex",
+        skip_serializing
+    )]
+    releasedate_snake: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub youtube_trailer: Option<String>,
+}
+
+impl VodInfo {
+    /// Release date, whichever spelling the panel used.
+    pub fn released(&self) -> Option<&str> {
+        self.releasedate
+            .as_deref()
+            .or(self.releasedate_snake.as_deref())
+    }
 }
 
 /// Response of `get_series_info&series_id=X`, slimmed to the episode list.
@@ -347,6 +423,9 @@ mod tests {
         assert_eq!(movies[0].container_extension.as_deref(), Some("mkv"));
         assert_eq!(movies[1].stream_id, StreamId(31341)); // string id
         assert_eq!(movies[1].category_id, Some(CategoryId("92".into()))); // numeric category
+        assert_eq!(movies[0].rating, Some(7.618)); // "7.618" string
+        assert_eq!(movies[1].rating, Some(4.0)); // "4" string
+        assert_eq!(movies[2].rating, None); // absent
         assert!(movies[2].is_adult); // "1"
         assert_eq!(movies[2].container_extension, None); // null
     }
@@ -358,6 +437,33 @@ mod tests {
         assert_eq!(series.len(), 2);
         assert_eq!(series[0].series_id, 48173);
         assert_eq!(series[1].series_id, 555); // string id
+        assert_eq!(series[0].genre.as_deref(), Some("Comedy / Drama"));
+        assert_eq!(series[0].rating, Some(7.0)); // "7" string
+        // Both `release_date` and `releaseDate` present — must not be
+        // rejected as a duplicate field, and must merge.
+        assert_eq!(series[0].released(), Some("2026-07-02"));
+        assert_eq!(series[1].released(), Some("2020-01-01")); // camelCase only
+        assert!(series[0].plot.as_deref().unwrap().starts_with("An unlucky"));
+        assert_eq!(series[1].rating, None);
+    }
+
+    #[test]
+    fn parses_real_vod_info() {
+        let response: VodInfoResponse =
+            serde_json::from_str(include_str!("fixtures/vod_info.json")).unwrap();
+        let info = response.info.unwrap();
+        assert!(info.plot.as_deref().unwrap().contains("survivors"));
+        assert_eq!(
+            info.genre.as_deref(),
+            Some("Thriller, Action, Science Fiction")
+        );
+        assert_eq!(info.rating, Some(4.0)); // number
+        assert_eq!(info.released(), Some("2014-10-03"));
+        assert_eq!(info.duration.as_deref(), Some("01:50:05"));
+        assert_eq!(info.cast, None); // "" → None
+        // Panels without an info block must not error.
+        let empty: VodInfoResponse = serde_json::from_str("{}").unwrap();
+        assert!(empty.info.is_none());
     }
 
     #[test]

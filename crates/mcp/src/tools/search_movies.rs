@@ -41,6 +41,9 @@ struct Match {
     stream_id: u64,
     name: String,
     category_id: Option<String>,
+    /// 0–10 scale when the panel provides one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rating: Option<f64>,
 }
 
 pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
@@ -74,6 +77,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
             stream_id: m.stream_id.0,
             name: m.name.clone(),
             category_id: m.category_id.as_ref().map(|c| c.0.clone()),
+            rating: m.rating,
         })
         .collect();
 
@@ -82,6 +86,6 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
         "total_matches": all.len(),
         "returned": matches.len(),
         "matches": matches,
-        "next_step": "Call play_movie with a stream_id (preferred) or an unambiguous name.",
+        "next_step": "Call get_movie_info for plot/cast/duration, or play_movie with a stream_id to start playback.",
     })))
 }

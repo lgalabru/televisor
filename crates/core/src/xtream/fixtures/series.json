@@ -5,6 +5,7 @@
     "series_id": 48173,
     "plot": "An unlucky teacher is assigned to teach sex ed in a hostile village.",
     "genre": "Comedy / Drama",
+    "releaseDate": "2026-07-02",
     "release_date": "2026-07-02",
     "rating": "7",
     "rating_5based": "3.5",
@@ -17,6 +18,7 @@
     "num": 2,
     "name": "NF - Breaking Ground",
     "series_id": "555",
-    "category_id": 12
+    "category_id": 12,
+    "releaseDate": "2020-01-01"
   }
 ]
