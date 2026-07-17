@@ -25,7 +25,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
 
     let opts = ResolveOptions {
@@ -54,16 +54,16 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                 params.movie
             )));
         }
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
 
     let client = match source.xtream() {
         Ok(client) => client,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     let info = match client.vod_info(movie.stream_id).await {
         Ok(info) => info,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     let released = info.released().map(str::to_string);
     Ok(super::tool_json(&serde_json::json!({

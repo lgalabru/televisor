@@ -53,7 +53,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     let category = match super::vod_category_for(&catalog, params.category.as_deref()).await {
         Ok(category) => category,
@@ -61,7 +61,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let movies = match catalog.movies(params.refresh).await {
         Ok(movies) => movies,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
 
     let opts = ResolveOptions {

@@ -51,6 +51,18 @@ pub fn error_json(message: &str) {
     }
 }
 
+/// Write a 402 to stderr with the parsed challenge attached, so an agent can
+/// hand it to pay: `{"error":{"message":…,"payment_required":{…}}}`.
+pub fn payment_required_json<T: Serialize>(message: &str, challenge: &T) {
+    let json = serde_json::json!({
+        "error": { "message": message, "payment_required": challenge }
+    });
+    match serde_json::to_string(&json) {
+        Ok(s) => eprintln!("{s}"),
+        Err(_) => error_json(message),
+    }
+}
+
 /// Guard an interactive prompt: in agent mode, fail with actionable guidance
 /// instead of blocking on stdin.
 pub fn require_interactive(what: &str) -> Result<(), String> {

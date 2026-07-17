@@ -39,6 +39,21 @@ pub(crate) fn tool_error(message: impl Into<String>) -> CallToolResult {
     tool_json(&serde_json::json!({ "error": message.into() }))
 }
 
+/// Failure from a typed error, attaching the parsed 402 challenge when the
+/// gateway is stablecoin-gated so the agent can hand it to pay.
+pub(crate) fn tool_err<E>(err: E) -> CallToolResult
+where
+    E: std::fmt::Display + televisor_core::payment::PaymentChallengeExt,
+{
+    match err.payment_challenge() {
+        Some(challenge) => tool_json(&serde_json::json!({
+            "error": err.to_string(),
+            "payment_required": challenge,
+        })),
+        None => tool_error(err.to_string()),
+    }
+}
+
 /// Resolve the account and build a client. Error strings are safe to show
 /// the model: every error type involved redacts credentials by construction.
 pub(crate) fn connect(account: Option<&str>) -> Result<(String, MediaSource), String> {

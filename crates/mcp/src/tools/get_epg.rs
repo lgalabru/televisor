@@ -43,7 +43,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
 
     let stream = match catalog
@@ -71,12 +71,12 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                 params.channel
             )));
         }
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
 
     let client = match source.xtream() {
         Ok(client) => client,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     let listings = if params.full {
         client.full_epg(stream.stream_id).await
@@ -87,7 +87,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let listings = match listings {
         Ok(listings) => listings,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     if listings.is_empty() {
         return Ok(super::tool_error(format!(

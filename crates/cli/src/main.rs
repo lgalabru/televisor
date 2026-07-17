@@ -103,30 +103,71 @@ async fn main() {
     };
     init_logging(&log_format);
 
-    let result: Result<(), String> = match opts.command {
-        Command::Setup(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Open(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Play(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Channels(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Movies(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Series(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Episodes(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Guide(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Info(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Categories(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Favorites(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::History(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Status(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Account(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
-        Command::Mcp => televisor_mcp::run_server(&Default::default()).await,
+    // The MCP server is a long-running process with its own error surface.
+    if let Command::Mcp = opts.command {
+        if let Err(e) = televisor_mcp::run_server(&Default::default()).await {
+            eprintln!("Error: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    let result: televisor_core::Result<()> = match opts.command {
+        Command::Setup(cmd) => cmd.execute().await,
+        Command::Open(cmd) => cmd.execute().await,
+        Command::Play(cmd) => cmd.execute().await,
+        Command::Channels(cmd) => cmd.execute().await,
+        Command::Movies(cmd) => cmd.execute().await,
+        Command::Series(cmd) => cmd.execute().await,
+        Command::Episodes(cmd) => cmd.execute().await,
+        Command::Guide(cmd) => cmd.execute().await,
+        Command::Info(cmd) => cmd.execute().await,
+        Command::Categories(cmd) => cmd.execute().await,
+        Command::Favorites(cmd) => cmd.execute().await,
+        Command::History(cmd) => cmd.execute().await,
+        Command::Status(cmd) => cmd.execute().await,
+        Command::Account(cmd) => cmd.execute().await,
+        Command::Mcp => unreachable!("handled above"),
     };
 
     if let Err(e) = result {
-        if no_dna::is_agent() {
-            no_dna::error_json(&e);
-        } else {
-            eprintln!("Error: {e}");
-        }
+        report_error(e);
         std::process::exit(1);
+    }
+}
+
+/// Surface an error, giving 402s a legible, actionable rendering.
+fn report_error(e: televisor_core::TelevisorError) {
+    use televisor_core::payment::PaymentChallengeExt;
+
+    let challenge = e.payment_challenge();
+    if no_dna::is_agent() {
+        match challenge {
+            Some(c) => no_dna::payment_required_json(&e.to_string(), c),
+            None => no_dna::error_json(&e.to_string()),
+        }
+        return;
+    }
+
+    match challenge {
+        Some(c) => {
+            eprintln!("Payment required to reach this gateway.");
+            if let Some(usd) = c.amount_usd {
+                eprintln!("  price:   ${usd}");
+            }
+            if !c.schemes.is_empty() {
+                eprintln!("  schemes: {}", c.schemes.join(", "));
+            }
+            if let Some(recipient) = &c.recipient {
+                eprintln!("  pay to:  {recipient}");
+            }
+            if let Some(network) = &c.network {
+                eprintln!("  network: {network}");
+            }
+            eprintln!(
+                "\nRun televisor under a pay payer-proxy (e.g. `pay run --upstream <gateway> -- televisor …`),\nor top up your wallet with `pay topup`."
+            );
+        }
+        None => eprintln!("Error: {e}"),
     }
 }

@@ -31,7 +31,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
 
     let show = match catalog
@@ -59,16 +59,16 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                 params.series
             )));
         }
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
 
     let client = match source.xtream() {
         Ok(client) => client,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     let episodes = match client.series_info(show.series_id).await {
         Ok(info) => info.episodes(),
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     let Some(episode) = episodes
         .iter()
@@ -96,7 +96,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     // The playback URL embeds credentials — handed to VLC, never returned.
     let url = match client.episode_url(episode.id, episode.container_extension.as_deref()) {
         Ok(url) => url,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     let title = format!("{} S{:02}E{:02}", show.name, params.season, params.episode);
     let open_opts = OpenOptions {
@@ -123,6 +123,6 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                 "note": "VLC was launched on the user's machine.",
             })))
         }
-        Err(err) => Ok(super::tool_error(err.to_string())),
+        Err(err) => Ok(super::tool_err(err)),
     }
 }

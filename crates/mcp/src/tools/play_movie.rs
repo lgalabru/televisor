@@ -33,7 +33,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     let category = match super::vod_category_for(&catalog, params.category.as_deref()).await {
         Ok(category) => category,
@@ -54,7 +54,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                 .and_then(|c| c.movie_url(movie.stream_id, movie.container_extension.as_deref()))
             {
                 Ok(url) => url,
-                Err(err) => return Ok(super::tool_error(err.to_string())),
+                Err(err) => return Ok(super::tool_err(err)),
             };
             let open_opts = OpenOptions {
                 fullscreen: params.fullscreen,
@@ -79,7 +79,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                         "note": "VLC was launched on the user's machine.",
                     })))
                 }
-                Err(err) => Ok(super::tool_error(err.to_string())),
+                Err(err) => Ok(super::tool_err(err)),
             }
         }
         Ok(Resolution::Ambiguous(candidates)) => {
@@ -100,6 +100,6 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
             "No movie matched '{}'. Call search_movies to find the right name or stream_id.",
             params.movie
         ))),
-        Err(err) => Ok(super::tool_error(err.to_string())),
+        Err(err) => Ok(super::tool_err(err)),
     }
 }

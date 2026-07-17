@@ -31,6 +31,13 @@ pub enum XtreamError {
     Status { code: u16 },
 
     #[error(
+        "Payment required ({}) — this gateway is stablecoin-gated. Run televisor under a pay payer-proxy (e.g. `pay run --upstream <gateway> -- televisor …`), or top up your wallet with `pay topup`.",
+        .0.summary()
+    )]
+    // Boxed so the challenge's size doesn't bloat the whole error enum.
+    PaymentRequired(Box<crate::payment::PaymentChallenge>),
+
+    #[error(
         "Authentication failed for account '{account}' — check the host, username, and password"
     )]
     AuthFailed { account: String },
@@ -57,6 +64,30 @@ impl From<reqwest::Error> for XtreamError {
         // reqwest errors Display their URL, which carries ?username=&password=.
         XtreamError::Http(err.without_url())
     }
+}
+
+impl crate::payment::PaymentChallengeExt for XtreamError {
+    fn payment_challenge(&self) -> Option<&crate::payment::PaymentChallenge> {
+        match self {
+            XtreamError::PaymentRequired(challenge) => Some(challenge.as_ref()),
+            _ => None,
+        }
+    }
+}
+
+/// Build a [`XtreamError::PaymentRequired`] from a 402 response, capturing the
+/// `WWW-Authenticate` challenge and body. Shared by the API and M3U paths.
+pub(crate) async fn payment_required(response: reqwest::Response) -> XtreamError {
+    let www_authenticate = response
+        .headers()
+        .get(reqwest::header::WWW_AUTHENTICATE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let body = response.text().await.unwrap_or_default();
+    XtreamError::PaymentRequired(Box::new(crate::payment::PaymentChallenge::parse(
+        www_authenticate.as_deref(),
+        &body,
+    )))
 }
 
 /// Container extensions come from the panel and are occasionally missing,
@@ -323,6 +354,9 @@ impl XtreamClient {
 
         let response = self.http.get(url).send().await?;
         let status = response.status();
+        if status == reqwest::StatusCode::PAYMENT_REQUIRED {
+            return Err(payment_required(response).await);
+        }
         if !status.is_success() {
             return Err(XtreamError::Status {
                 code: status.as_u16(),

@@ -95,6 +95,15 @@ pub enum CatalogError {
     Xtream(#[from] XtreamError),
 }
 
+impl crate::payment::PaymentChallengeExt for CatalogError {
+    fn payment_challenge(&self) -> Option<&crate::payment::PaymentChallenge> {
+        match self {
+            CatalogError::Xtream(e) => e.payment_challenge(),
+            _ => None,
+        }
+    }
+}
+
 type Result<T> = std::result::Result<T, CatalogError>;
 
 #[derive(Serialize, Deserialize)]

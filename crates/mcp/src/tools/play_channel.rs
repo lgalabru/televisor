@@ -60,7 +60,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     let category = match super::category_for(&catalog, params.category.as_deref()).await {
         Ok(category) => category,
@@ -74,7 +74,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let resolution = match catalog.resolve(&params.channel, &opts).await {
         Ok(resolution) => resolution,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
 
     match resolution {
@@ -99,14 +99,14 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                         .and_then(|c| c.timeshift_url(stream.stream_id, &start, duration, format))
                     {
                         Ok(url) => url,
-                        Err(err) => return Ok(super::tool_error(err.to_string())),
+                        Err(err) => return Ok(super::tool_err(err)),
                     };
                     (url, format!("{} @ {at}", stream.name), "catch-up")
                 }
                 None => {
                     let url = match source.live_stream_url(&stream, format) {
                         Ok(url) => url,
-                        Err(err) => return Ok(super::tool_error(err.to_string())),
+                        Err(err) => return Ok(super::tool_err(err)),
                     };
                     (url, stream.name.clone(), "live")
                 }
@@ -131,7 +131,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                         "note": "VLC was launched on the user's machine.",
                     })))
                 }
-                Err(err) => Ok(super::tool_error(err.to_string())),
+                Err(err) => Ok(super::tool_err(err)),
             }
         }
         Resolution::Ambiguous(candidates) => {

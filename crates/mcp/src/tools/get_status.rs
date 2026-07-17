@@ -17,7 +17,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let client = match source.xtream() {
         Ok(client) => client,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     match client.account_info().await {
         // UserInfo/ServerInfo intentionally never carry credentials, so the
@@ -28,6 +28,6 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
             "server_info": summary.server_info,
             "note": "exp_date and created_at are unix epoch seconds; exp_date null means unlimited",
         }))),
-        Err(err) => Ok(super::tool_error(err.to_string())),
+        Err(err) => Ok(super::tool_err(err)),
     }
 }

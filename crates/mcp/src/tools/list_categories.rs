@@ -21,10 +21,10 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
     };
     let catalog = match Catalog::new(&source, &name) {
         Ok(catalog) => catalog,
-        Err(err) => return Ok(super::tool_error(err.to_string())),
+        Err(err) => return Ok(super::tool_err(err)),
     };
     match catalog.categories(params.refresh).await {
         Ok(categories) => Ok(super::tool_json(&categories)),
-        Err(err) => Ok(super::tool_error(err.to_string())),
+        Err(err) => Ok(super::tool_err(err)),
     }
 }

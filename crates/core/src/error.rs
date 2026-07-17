@@ -2,6 +2,7 @@ use thiserror::Error;
 
 use crate::catalog::CatalogError;
 use crate::config::ConfigError;
+use crate::payment::{PaymentChallenge, PaymentChallengeExt};
 use crate::vlc::VlcError;
 use crate::xtream::XtreamError;
 
@@ -18,6 +19,16 @@ pub enum TelevisorError {
 
     #[error("Catalog error: {0}")]
     Catalog(#[from] CatalogError),
+}
+
+impl PaymentChallengeExt for TelevisorError {
+    fn payment_challenge(&self) -> Option<&PaymentChallenge> {
+        match self {
+            TelevisorError::Xtream(e) => e.payment_challenge(),
+            TelevisorError::Catalog(e) => e.payment_challenge(),
+            _ => None,
+        }
+    }
 }
 
 pub type Result<T> = std::result::Result<T, TelevisorError>;

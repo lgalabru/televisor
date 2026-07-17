@@ -53,6 +53,9 @@ impl M3uSource {
         debug!(url = %redact_url_str(self.url.expose()), account = %self.account, "Fetching M3U playlist");
         let response = self.http.get(self.url.expose()).send().await?;
         let status = response.status();
+        if status == reqwest::StatusCode::PAYMENT_REQUIRED {
+            return Err(crate::xtream::client::payment_required(response).await);
+        }
         if !status.is_success() {
             return Err(XtreamError::Status {
                 code: status.as_u16(),
