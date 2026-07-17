@@ -14,6 +14,15 @@ impl StatusCommand {
         let summary = source.xtream()?.account_info().await?;
         let user = &summary.user_info;
 
+        if crate::no_dna::is_agent() {
+            crate::no_dna::emit_json(&serde_json::json!({
+                "account": name,
+                "user_info": user,
+                "server_info": summary.server_info,
+            }));
+            return Ok(());
+        }
+
         println!("Account:        {name}");
         println!(
             "Status:         {}{}",

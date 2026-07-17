@@ -100,6 +100,10 @@ impl ListCommand {
         let (account, _source) = super::client_for(self.account.as_deref())?;
         let file = StateFile::open()?;
         let favorites = file.favorites(&account);
+        if crate::no_dna::is_agent() {
+            crate::no_dna::emit_json(&favorites);
+            return Ok(());
+        }
         if favorites.is_empty() {
             println!("No favorites yet — `televisor favorites add <channel>`.");
             return Ok(());

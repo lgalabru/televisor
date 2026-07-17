@@ -2,6 +2,7 @@ use clap::{Parser, ValueEnum};
 use tracing_subscriber::{EnvFilter, fmt};
 
 mod commands;
+mod no_dna;
 
 #[derive(Parser)]
 #[clap(
@@ -13,6 +14,10 @@ struct Opts {
     /// Log output format
     #[clap(long, global = true, value_enum, default_value_t = LoggingFormat::Standard)]
     log_format: LoggingFormat,
+
+    /// Machine-readable output for agents/automation (also via NO_DNA env)
+    #[clap(long, global = true)]
+    no_dna: bool,
 
     #[clap(subcommand)]
     command: Command,
@@ -86,7 +91,17 @@ fn init_logging(format: &LoggingFormat) {
 #[tokio::main]
 async fn main() {
     let opts = Opts::parse();
-    init_logging(&opts.log_format);
+    if opts.no_dna {
+        no_dna::enable_for_process();
+    }
+    // Agents parse stdout as JSON; force JSON logs (to stderr) so plain-text
+    // log lines never confuse them.
+    let log_format = if no_dna::is_agent() {
+        LoggingFormat::Json
+    } else {
+        opts.log_format
+    };
+    init_logging(&log_format);
 
     let result: Result<(), String> = match opts.command {
         Command::Setup(cmd) => cmd.execute().await.map_err(|e| e.to_string()),
@@ -107,7 +122,11 @@ async fn main() {
     };
 
     if let Err(e) = result {
-        eprintln!("Error: {e}");
+        if no_dna::is_agent() {
+            no_dna::error_json(&e);
+        } else {
+            eprintln!("Error: {e}");
+        }
         std::process::exit(1);
     }
 }

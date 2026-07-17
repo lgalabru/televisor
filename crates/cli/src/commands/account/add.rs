@@ -51,6 +51,8 @@ impl AddCommand {
             let password = match self.password.clone().map(Redacted::new).or(host.password) {
                 Some(password) => password,
                 None => {
+                    crate::no_dna::require_interactive("password entry")
+                        .map_err(ConfigError::Interactive)?;
                     let typed = rpassword::prompt_password("Password: ").map_err(|source| {
                         ConfigError::Io {
                             path: "<stdin>".into(),

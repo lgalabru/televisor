@@ -1892,6 +1892,7 @@ dependencies = [
  "dialoguer",
  "jiff",
  "rpassword",
+ "serde",
  "serde_json",
  "televisor-core",
  "televisor-mcp",

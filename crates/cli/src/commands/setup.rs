@@ -28,6 +28,11 @@ impl SetupCommand {
             return Ok(());
         }
 
+        // `setup` is inherently interactive (account prompts). Agents should
+        // provision non-interactively via `account add` with explicit flags.
+        crate::no_dna::require_interactive("`televisor setup`")
+            .map_err(televisor_core::config::ConfigError::Interactive)?;
+
         let mut file = ConfigFile::open()?;
         if !file.config.accounts.is_empty() && !self.force {
             let names: Vec<&str> = file.config.accounts.keys().map(String::as_str).collect();

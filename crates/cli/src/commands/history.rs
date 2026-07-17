@@ -17,6 +17,11 @@ impl HistoryCommand {
         let (account, _source) = super::client_for(self.account.as_deref())?;
         let file = StateFile::open()?;
         let history = file.history(&account);
+        if crate::no_dna::is_agent() {
+            let recent: Vec<_> = history.iter().take(self.limit).collect();
+            crate::no_dna::emit_json(&recent);
+            return Ok(());
+        }
         if history.is_empty() {
             println!("Nothing played yet.");
             return Ok(());

@@ -50,6 +50,12 @@ impl ChannelsCommand {
         let streams = catalog.streams(self.refresh).await?;
 
         if query.is_empty() && category.is_none() && !self.all && !self.archive && !self.recent {
+            if crate::no_dna::is_agent() {
+                crate::no_dna::emit_json(
+                    &serde_json::json!({ "count": streams.len(), "hint": "pass a query, --category, or --all" }),
+                );
+                return Ok(());
+            }
             println!(
                 "{} channels available — pass a search term, --category, or --all to list them.",
                 streams.len()
@@ -71,11 +77,8 @@ impl ChannelsCommand {
             results.truncate(self.limit);
         }
 
-        if self.json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&results).expect("streams serialize")
-            );
+        if crate::no_dna::should_json(self.json) {
+            crate::no_dna::emit_json(&results);
         } else if results.is_empty() {
             println!("No channels matched.");
         } else {

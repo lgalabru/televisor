@@ -46,11 +46,8 @@ impl InfoCommand {
                     std::process::exit(1);
                 }
             };
-            if self.json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&show).expect("serialize")
-                );
+            if crate::no_dna::should_json(self.json) {
+                crate::no_dna::emit_json(&show);
                 return Ok(());
             }
             println!("{} (series id {})", show.name, show.series_id);
@@ -77,12 +74,8 @@ impl InfoCommand {
         };
         let info = source.xtream()?.vod_info(movie.stream_id).await?;
 
-        if self.json {
-            let combined = serde_json::json!({ "movie": movie, "info": info });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&combined).expect("serialize")
-            );
+        if crate::no_dna::should_json(self.json) {
+            crate::no_dna::emit_json(&serde_json::json!({ "movie": movie, "info": info }));
             return Ok(());
         }
         println!("{} (id {})", movie.name, movie.stream_id);

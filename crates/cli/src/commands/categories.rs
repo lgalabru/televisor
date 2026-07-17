@@ -21,11 +21,8 @@ impl CategoriesCommand {
         let catalog = Catalog::new(&source, &name)?;
         let categories = catalog.categories(self.refresh).await?;
 
-        if self.json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&categories).expect("categories serialize")
-            );
+        if crate::no_dna::should_json(self.json) {
+            crate::no_dna::emit_json(&categories);
         } else {
             for category in &categories {
                 println!("{:>8}  {}", category.category_id, category.category_name);

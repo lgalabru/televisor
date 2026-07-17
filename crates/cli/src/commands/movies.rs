@@ -47,6 +47,12 @@ impl MoviesCommand {
         let movies = catalog.movies(self.refresh).await?;
 
         if query.is_empty() && category.is_none() && !self.all && !self.recent {
+            if crate::no_dna::is_agent() {
+                crate::no_dna::emit_json(
+                    &serde_json::json!({ "count": movies.len(), "hint": "pass a query, --category, or --all" }),
+                );
+                return Ok(());
+            }
             println!(
                 "{} movies available — pass a search term, --category, or --all to list them.",
                 movies.len()
@@ -65,11 +71,8 @@ impl MoviesCommand {
             results.truncate(self.limit);
         }
 
-        if self.json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&results).expect("movies serialize")
-            );
+        if crate::no_dna::should_json(self.json) {
+            crate::no_dna::emit_json(&results);
         } else if results.is_empty() {
             println!("No movies matched.");
         } else {

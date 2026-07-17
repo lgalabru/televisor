@@ -48,6 +48,9 @@ pub enum ConfigError {
     #[error("No username — pass --username or paste a playlist URL that embeds it")]
     MissingUsername,
 
+    #[error("{0}")]
+    Interactive(String),
+
     #[error("Invalid account name '{0}' — use letters, digits, dashes, and underscores only")]
     InvalidAccountName(String),
 

@@ -66,11 +66,12 @@ impl GuideCommand {
             client.short_epg(stream.stream_id, self.limit).await?
         };
 
-        if self.json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&listings).expect("listings serialize")
-            );
+        if crate::no_dna::should_json(self.json) {
+            crate::no_dna::emit_json(&serde_json::json!({
+                "channel": stream.name,
+                "stream_id": stream.stream_id,
+                "listings": listings,
+            }));
             return Ok(());
         }
 

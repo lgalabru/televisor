@@ -63,11 +63,12 @@ impl EpisodesCommand {
             .series_info(show.series_id)
             .await?
             .episodes();
-        if self.json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&episodes).expect("episodes serialize")
-            );
+        if crate::no_dna::should_json(self.json) {
+            crate::no_dna::emit_json(&serde_json::json!({
+                "series": show.name,
+                "series_id": show.series_id,
+                "episodes": episodes,
+            }));
             return Ok(());
         }
 
