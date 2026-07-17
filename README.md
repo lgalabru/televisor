@@ -51,7 +51,7 @@ televisor favorites add fox sports 1 # ★ favorites (add/remove/list)
 televisor history                    # recently played
 televisor play --last                # replay the most recent item
 
-televisor open <url-or-file>         # raw VLC passthrough
+televisor open <url-or-file>         # raw player passthrough (any URL/file)
 ```
 
 Ambiguous `play` queries print ranked candidates and exit with code 2 — pass a numeric id to disambiguate. Try `--format ts` if a live channel won't play as m3u8. Live TV, movies, and series each have their own `--category` lists. Catch-up `--at` times are interpreted in the panel's timezone (`televisor status` shows it).
@@ -68,7 +68,7 @@ Live TV (search, categories, play, favorites) works from the parsed playlist; VO
 
 ## MCP server (Claude / Codex)
 
-`televisor mcp` serves MCP on stdio with twelve tools: `list_accounts`, `get_status`, `list_categories`, `search_channels` (with archive flags), `play_channel` (live or catch-up via `at`), `get_epg`, `search_movies`, `get_movie_info`, `play_movie`, `search_series`, `get_series_episodes`, `play_episode`. Playback launches VLC locally — stream URLs (which embed panel credentials) are never returned to the model, and account credentials can only be managed via the CLI.
+`televisor mcp` serves MCP on stdio with twelve tools: `list_accounts`, `get_status`, `list_categories`, `search_channels` (with archive flags), `play_channel` (live or catch-up via `at`), `get_epg`, `search_movies`, `get_movie_info`, `play_movie`, `search_series`, `get_series_episodes`, `play_episode`. Playback launches your player locally — stream URLs (which embed panel credentials) are never returned to the model, and account credentials can only be managed via the CLI.
 
 `televisor setup` installs the server into `~/.claude.json` (Claude Code), Claude Desktop, and `~/.codex/config.toml` (Codex) — idempotent, additive, and pointing at the current binary. Manual config, if you prefer:
 
@@ -113,7 +113,7 @@ just test-network   # ignored smoke tests against a real panel (TELEVISOR_TEST_*
 
 ```
 crates/
-├── core/   # Xtream client, config, catalog cache, VLC launcher, redaction (televisor-core)
+├── core/   # Xtream client, config, catalog cache, player launcher, redaction (televisor-core)
 ├── cli/    # Clap frontend, one module per command (televisor binary)
 └── mcp/    # MCP server, thin dispatch over core (televisor-mcp)
 ```
