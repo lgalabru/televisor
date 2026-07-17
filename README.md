@@ -1,6 +1,6 @@
 # televisor.sh
 
-IPTV from the terminal: browse Xtream Codes panels and play live TV, movies (VOD), and series in VLC — as a CLI, or as an MCP server for AI agents.
+IPTV from the terminal: browse Xtream Codes panels and play live TV, movies (VOD), and series in your media player — as a CLI, or as an MCP server for AI agents.
 
 ## Install
 
@@ -31,7 +31,7 @@ televisor setup --update             # (re-)install the MCP configs only
 televisor status                     # subscription state, expiry, connections
 televisor categories                 # live categories
 televisor channels fox sports        # search 37k+ channels (local cache, ~ms)
-televisor play fox sports 1          # fuzzy-resolve and open in VLC
+televisor play fox sports 1          # fuzzy-resolve and open in your player
 televisor play 429586 --fullscreen   # by stream id
 
 televisor guide fox sports 1         # EPG: what's on now/next (--full for the day)
