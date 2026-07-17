@@ -54,6 +54,21 @@ where
     }
 }
 
+/// Resolve the configured media player (env/config; VLC default). Agents
+/// don't pick the player per call — it's a machine preference.
+pub(crate) fn player() -> televisor_core::player::Player {
+    use televisor_core::player::Player;
+    if let Ok(spec) = std::env::var("TELEVISOR_PLAYER") {
+        return Player::parse(&spec);
+    }
+    if let Ok(config) = TelevisorConfig::load()
+        && let Some(spec) = config.player
+    {
+        return Player::parse(&spec);
+    }
+    Player::default()
+}
+
 /// Resolve the account and build a client. Error strings are safe to show
 /// the model: every error type involved redacts credentials by construction.
 pub(crate) fn connect(account: Option<&str>) -> Result<(String, MediaSource), String> {

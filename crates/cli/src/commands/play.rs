@@ -1,9 +1,9 @@
 use clap::Args;
 use televisor_core::Result;
 use televisor_core::catalog::{Catalog, Resolution, ResolveOptions};
+use televisor_core::player::{self, OpenOptions};
 use televisor_core::source::MediaSource;
 use televisor_core::state::{MediaKind, PlayRecord, StateFile, record_play_best_effort};
-use televisor_core::vlc::{self, OpenOptions};
 use televisor_core::xtream::StreamFormat;
 use url::Url;
 
@@ -44,6 +44,9 @@ pub struct PlayCommand {
     /// Live container format; try `ts` if m3u8 playback fails on this panel
     #[clap(long, default_value_t = StreamFormat::M3u8)]
     pub format: StreamFormat,
+    /// Player: vlc (default), mpv, iina, ffplay, system, or a command template
+    #[clap(long)]
+    pub player: Option<String>,
     /// Include adult-flagged entries in name matching
     #[clap(long)]
     pub include_adult: bool,
@@ -56,7 +59,7 @@ pub struct PlayCommand {
     /// Network caching in milliseconds
     #[clap(long)]
     pub caching: Option<u32>,
-    /// Quit VLC when the stream ends
+    /// Quit the player when the stream ends
     #[clap(long)]
     pub exit_on_end: bool,
     /// Account name (defaults to the configured default)
@@ -325,7 +328,11 @@ impl PlayCommand {
             exit_on_end: self.exit_on_end,
             title: Some(title.to_string()),
         };
-        vlc::open_stream(url.as_str(), &opts)?;
+        player::open_stream(
+            url.as_str(),
+            &opts,
+            &super::player_for(self.player.as_deref()),
+        )?;
         println!("▶ {title} (id {id})");
         Ok(())
     }

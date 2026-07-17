@@ -3,8 +3,8 @@ use rmcp::schemars;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use televisor_core::catalog::{Catalog, Resolution, ResolveOptions};
+use televisor_core::player::{self, OpenOptions};
 use televisor_core::state::{MediaKind, PlayRecord, record_play_best_effort};
-use televisor_core::vlc::{self, OpenOptions};
 use televisor_core::xtream::StreamFormat;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -116,7 +116,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                 title: Some(title.clone()),
                 ..Default::default()
             };
-            match vlc::open_stream(url.as_str(), &open_opts) {
+            match player::open_stream(url.as_str(), &open_opts, &super::player()) {
                 Ok(pid) => {
                     record_play_best_effort(
                         &name,
@@ -127,7 +127,7 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
                         "stream_id": stream.stream_id.0,
                         "mode": mode,
                         "format": format.ext(),
-                        "vlc_pid": pid,
+                        "player_pid": pid,
                         "note": "VLC was launched on the user's machine.",
                     })))
                 }

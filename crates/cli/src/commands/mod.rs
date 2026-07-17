@@ -15,8 +15,26 @@ pub mod status;
 
 use televisor_core::catalog::{self, CatalogError};
 use televisor_core::config::TelevisorConfig;
+use televisor_core::player::Player;
 use televisor_core::source::MediaSource;
 use televisor_core::xtream::CategoryId;
+
+/// Resolve the media player: `--player` flag > `TELEVISOR_PLAYER` env >
+/// `player` in config > VLC.
+pub(crate) fn player_for(explicit: Option<&str>) -> Player {
+    if let Some(spec) = explicit {
+        return Player::parse(spec);
+    }
+    if let Ok(spec) = std::env::var("TELEVISOR_PLAYER") {
+        return Player::parse(&spec);
+    }
+    if let Ok(config) = TelevisorConfig::load()
+        && let Some(spec) = config.player
+    {
+        return Player::parse(&spec);
+    }
+    Player::default()
+}
 
 /// Resolve the account and build its media source (Xtream client or M3U
 /// playlist) — the shared entry point of every panel-touching command.

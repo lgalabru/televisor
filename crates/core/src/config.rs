@@ -91,6 +91,10 @@ pub struct Account {
 pub struct TelevisorConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_account: Option<String>,
+    /// Media player: "vlc" (default), "mpv", "iina", "ffplay", "system", or a
+    /// custom command template with `{url}`/`{title}`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player: Option<String>,
     #[serde(default)]
     pub accounts: BTreeMap<String, Account>,
     /// True when the `env` account was synthesized from `TELEVISOR_HOST/...`.

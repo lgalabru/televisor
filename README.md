@@ -12,7 +12,7 @@ televisor setup  # interactive first run: account + MCP install
 
 ## Requirements
 
-- [VLC](https://www.videolan.org) installed (or `VLC_PATH` pointing at the binary)
+- A media player — [VLC](https://www.videolan.org) by default (or `VLC_PATH` to its binary). mpv, IINA, and ffplay work too; see [Player](#player).
 - [Just](https://github.com/casey/just) as the task runner
 
 ## Quick start
@@ -77,6 +77,18 @@ Live TV (search, categories, play, favorites) works from the parsed playlist; VO
 ```
 
 This repo also ships a `.mcp.json` so Claude Code picks it up automatically inside the repo (via `cargo run`).
+
+## Player
+
+VLC is the default but not required. Pick another with `--player` on `open`/`play`, the `TELEVISOR_PLAYER` env var, or `player = "…"` in config:
+
+```bash
+televisor play fox sports 1 --player mpv
+televisor play --movie dune --player iina        # macOS
+TELEVISOR_PLAYER='mpv --force-media-title={title} {url}' televisor play bbc one
+```
+
+Built-in presets: `vlc`, `mpv`, `iina`, `ffplay`. Any other value is a command template — `{url}` and `{title}` are substituted (no shell, so credentials never hit one), and a bare command gets the URL appended. `--player system` hands the URL to the OS default handler (`open`/`xdg-open`/`start`) — convenient if you've associated a player, but it can't set the window title (so a credentialed URL may show) and for `http` streams often opens a browser, so it's opt-in.
 
 ## Configuration
 

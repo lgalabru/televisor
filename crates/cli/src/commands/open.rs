@@ -1,5 +1,5 @@
 use clap::Args;
-use televisor_core::vlc::{self, OpenOptions};
+use televisor_core::player::{self, OpenOptions};
 
 #[derive(Args)]
 pub struct OpenCommand {
@@ -14,9 +14,13 @@ pub struct OpenCommand {
     #[clap(long)]
     pub caching: Option<u32>,
 
-    /// Quit VLC when the stream ends
+    /// Quit the player when the stream ends
     #[clap(long)]
     pub exit_on_end: bool,
+
+    /// Player: vlc (default), mpv, iina, ffplay, system, or a command template
+    #[clap(long)]
+    pub player: Option<String>,
 }
 
 impl OpenCommand {
@@ -27,7 +31,7 @@ impl OpenCommand {
             exit_on_end: self.exit_on_end,
             title: None,
         };
-        vlc::open_stream(&self.url, &opts)?;
+        player::open_stream(&self.url, &opts, &super::player_for(self.player.as_deref()))?;
         Ok(())
     }
 }

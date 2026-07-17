@@ -3,13 +3,13 @@ use thiserror::Error;
 use crate::catalog::CatalogError;
 use crate::config::ConfigError;
 use crate::payment::{PaymentChallenge, PaymentChallengeExt};
-use crate::vlc::VlcError;
+use crate::player::PlayerError;
 use crate::xtream::XtreamError;
 
 #[derive(Debug, Error)]
 pub enum TelevisorError {
-    #[error("VLC error: {0}")]
-    Vlc(#[from] VlcError),
+    #[error("Player error: {0}")]
+    Player(#[from] PlayerError),
 
     #[error("Configuration error: {0}")]
     Config(#[from] ConfigError),
