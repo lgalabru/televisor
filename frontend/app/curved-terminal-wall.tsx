@@ -169,7 +169,7 @@ export function CurvedTerminalWall({ screens }: CurvedTerminalWallProps) {
       if (!container || !canvas || !scroller) return;
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(10, 1, 0.1, 50);
+      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 50);
       const renderer = new THREE.WebGLRenderer({
         canvas,
         alpha: true,
@@ -184,41 +184,66 @@ export function CurvedTerminalWall({ screens }: CurvedTerminalWallProps) {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
 
-      const radius = 2.65;
+      const radius = 3.2;
       const height = 2.15;
-      const geometry = new THREE.CylinderGeometry(
-        radius,
-        radius,
-        height,
-        128,
-        24,
-        true,
-      );
-
+      const columnTurn = (Math.PI * 2) / COLUMN_COUNT;
+      const panelWidth = 2 * radius * Math.tan(columnTurn / 2) * 0.94;
       const material = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
-        side: THREE.DoubleSide,
       });
-      const mesh = new THREE.Mesh(geometry, material);
-      scene.add(mesh);
+      const wall = new THREE.Group();
+      const panelGeometries: InstanceType<typeof THREE.PlaneGeometry>[] = [];
+      const panels: InstanceType<typeof THREE.Mesh>[] = [];
+
+      for (let column = 0; column < COLUMN_COUNT; column += 1) {
+        const geometry = new THREE.PlaneGeometry(panelWidth, height);
+        const uvs = geometry.getAttribute("uv");
+        for (let index = 0; index < uvs.count; index += 1) {
+          uvs.setX(index, (column + uvs.getX(index)) / COLUMN_COUNT);
+        }
+        uvs.needsUpdate = true;
+        panelGeometries.push(geometry);
+
+        const panel = new THREE.Mesh(geometry, material);
+        const angle = column * columnTurn;
+        panel.position.set(
+          radius * Math.sin(angle),
+          0,
+          -radius * Math.cos(angle),
+        );
+        panel.lookAt(0, 0, 0);
+        wall.add(panel);
+        panels.push(panel);
+      }
+      scene.add(wall);
 
       let initialized = false;
       let previousWidth = 0;
       let snapTimeout: ReturnType<typeof setTimeout> | undefined;
       let lastActiveColumn = -1;
-      const columnTurn = (Math.PI * 2) / COLUMN_COUNT;
-      // CylinderGeometry starts its UV seam at the front. Offset by half a
-      // column so a terminal column—not the join between two—faces the camera.
-      const textureAlignment = -columnTurn / 2;
-
       const renderScene = () => {
         renderer.render(scene, camera);
       };
 
       const updateRotation = () => {
         const page = scroller.scrollLeft / Math.max(container.clientWidth, 1);
-        mesh.rotation.y = textureAlignment - page * columnTurn;
+        wall.rotation.y = -page * columnTurn;
+        panels.forEach((panel, column) => {
+          const rawDelta = column - page;
+          const wrappedDelta =
+            ((rawDelta + COLUMN_COUNT / 2) % COLUMN_COUNT + COLUMN_COUNT) %
+              COLUMN_COUNT -
+            COLUMN_COUNT / 2;
+          const focus = Math.max(0, 1 - Math.abs(wrappedDelta));
+          const panelRadius = radius - focus * 0.85;
+          const angle = column * columnTurn;
+          panel.position.set(
+            panelRadius * Math.sin(angle),
+            0,
+            -panelRadius * Math.cos(angle),
+          );
+        });
         const nextActive =
           ((Math.round(page) % COLUMN_COUNT) + COLUMN_COUNT) % COLUMN_COUNT;
         if (nextActive !== lastActiveColumn) {
@@ -234,14 +259,9 @@ export function CurvedTerminalWall({ screens }: CurvedTerminalWallProps) {
         const page =
           previousWidth > 0 ? scroller.scrollLeft / previousWidth : INITIAL_PAGE;
         renderer.setSize(rect.width, rect.height, false);
-        camera.aspect = rect.width / rect.height;
-        const verticalTangent = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-        const distanceForHeight = height / 2 / verticalTangent;
-        const distanceForWidth = radius / (verticalTangent * camera.aspect);
-        const frontClearance =
-          Math.max(distanceForHeight, distanceForWidth) + 0.35;
-        camera.position.set(0, 0, radius + frontClearance);
-        camera.lookAt(0, 0, 0);
+        camera.aspect = (rect.width / rect.height) * 0.8;
+        camera.position.set(0, 0, 0);
+        camera.lookAt(0, 0, -radius);
         camera.updateProjectionMatrix();
         previousWidth = rect.width;
         scroller.scrollLeft = page * rect.width;
@@ -287,8 +307,8 @@ export function CurvedTerminalWall({ screens }: CurvedTerminalWallProps) {
         resizeObserver.disconnect();
         scroller.removeEventListener("scroll", handleScroll);
         scroller.removeEventListener("wheel", handleWheel);
-        scene.remove(mesh);
-        geometry.dispose();
+        scene.remove(wall);
+        panelGeometries.forEach((geometry) => geometry.dispose());
         material.dispose();
         texture.dispose();
         renderer.dispose();
