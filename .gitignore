@@ -12,3 +12,9 @@
 # Editors
 .idea/
 .vscode/
+
+# VLCKit, fetched by apps/scripts/fetch-vlckit.sh
+apps/vendor/
+
+# Xcode per-user state
+xcuserdata/

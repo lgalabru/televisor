@@ -33,3 +33,7 @@ test:
 # Ignored smoke tests against a real panel (needs TELEVISOR_TEST_* secrets)
 test-network:
     doppler run -- cargo test --workspace --features televisor-core/test-network -- --ignored
+
+# Apple apps (apps/ios, apps/tvos): fetch VLCKit into apps/vendor once
+apple-deps:
+    apps/scripts/fetch-vlckit.sh
