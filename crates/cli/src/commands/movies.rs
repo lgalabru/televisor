@@ -44,7 +44,10 @@ impl MoviesCommand {
             self.refresh,
         )
         .await?;
-        let movies = catalog.movies(self.refresh).await?;
+        let movies = match category.as_ref() {
+            Some(category) => catalog.movies_in_category(category, self.refresh).await?,
+            None => catalog.movies(self.refresh).await?,
+        };
 
         if query.is_empty() && category.is_none() && !self.all && !self.recent {
             if crate::no_dna::is_agent() {

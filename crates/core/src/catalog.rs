@@ -169,6 +169,53 @@ impl<'a> Catalog<'a> {
         .map(|(data, _)| data)
     }
 
+    /// Movies in one VOD category, cached independently from the full catalog.
+    ///
+    /// Panels commonly expose tens of thousands of movies. Asking the panel
+    /// for only the selected category makes the first scoped search much
+    /// faster and keeps its cache small. If a fresh full-catalog cache already
+    /// exists, reuse it instead of making another network request.
+    pub async fn movies_in_category(
+        &self,
+        category: &CategoryId,
+        refresh: bool,
+    ) -> Result<Vec<VodStream>> {
+        let file = category_cache_file("vod_streams", category);
+        if !refresh {
+            if let Some(movies) = read_cache(&self.dir.join(&file), self.ttl) {
+                return Ok(movies);
+            }
+            if let Some(all) =
+                read_cache::<Vec<VodStream>>(&self.dir.join("vod_streams.json"), self.ttl)
+            {
+                let movies: Vec<_> = all
+                    .into_iter()
+                    .filter(|movie| movie.category_id.as_ref() == Some(category))
+                    .collect();
+                if let Err(err) = write_cache(&self.dir.join(&file), &movies) {
+                    warn!(error = %err, "failed to write category movie cache");
+                }
+                return Ok(movies);
+            }
+        }
+
+        self.cached(&file, refresh, || async {
+            let mut movies = self.source.xtream()?.vod_streams(Some(category)).await?;
+            // A few panel implementations ignore category_id and return the
+            // full catalog. Keep this cache scoped even when they do.
+            if movies.iter().any(|movie| movie.category_id.is_some()) {
+                movies.retain(|movie| movie.category_id.as_ref() == Some(category));
+            } else {
+                for movie in &mut movies {
+                    movie.category_id = Some(category.clone());
+                }
+            }
+            Ok(movies)
+        })
+        .await
+        .map(|(data, _)| data)
+    }
+
     pub async fn series_list(&self, refresh: bool) -> Result<Vec<Series>> {
         self.cached("series.json", refresh, || async {
             Ok(self.source.xtream()?.series_list(None).await?)
@@ -351,23 +398,59 @@ pub fn search<T: MediaItem>(
     opts: &ResolveOptions,
     limit: usize,
 ) -> Vec<T> {
+    search_page(items, query, opts, 0, limit).matches
+}
+
+/// One page of ranked substring-search results.
+#[derive(Debug)]
+pub struct SearchPage<T> {
+    /// Total matches before pagination.
+    pub total: usize,
+    /// Requested page, ranked best-first.
+    pub matches: Vec<T>,
+}
+
+/// Search without cloning matches that fall outside the requested page.
+/// Normalized names are computed once and reused for both filtering and
+/// ranking, which matters for catalogs containing tens of thousands of rows.
+pub fn search_page<T: MediaItem>(
+    items: &[T],
+    query: &str,
+    opts: &ResolveOptions,
+    offset: usize,
+    limit: usize,
+) -> SearchPage<T> {
     let needle = normalize(query);
-    let mut matches: Vec<&T> = items
+    let mut matches: Vec<(usize, &T, String)> = items
         .iter()
-        .filter(|s| opts.include_adult || !s.media_is_adult())
+        .enumerate()
+        .filter(|(_, item)| opts.include_adult || !item.media_is_adult())
         .filter(|s| {
             opts.category
                 .as_ref()
-                .is_none_or(|wanted| s.media_category() == Some(wanted))
+                .is_none_or(|wanted| s.1.media_category() == Some(wanted))
         })
-        .filter(|s| needle.is_empty() || normalize(s.media_name()).contains(&needle))
+        .filter_map(|(index, item)| {
+            let name = normalize(item.media_name());
+            (needle.is_empty() || name.contains(&needle)).then_some((index, item, name))
+        })
         .collect();
-    matches.sort_by_key(|s| {
-        let name = normalize(s.media_name());
-        (!name.starts_with(&needle), name.len(), s.media_id())
+    matches.sort_unstable_by_key(|(index, item, name)| {
+        (
+            !name.starts_with(&needle),
+            name.len(),
+            item.media_id(),
+            *index,
+        )
     });
-    matches.truncate(limit);
-    matches.into_iter().cloned().collect()
+    let total = matches.len();
+    let matches = matches
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .map(|(_, item, _)| item.clone())
+        .collect();
+    SearchPage { total, matches }
 }
 
 /// Resolve a category by exact id, then case-insensitive name substring.
@@ -394,6 +477,15 @@ fn normalize(name: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
         .to_lowercase()
+}
+
+fn category_cache_file(prefix: &str, category: &CategoryId) -> String {
+    let mut encoded = String::with_capacity(category.0.len() * 2);
+    for byte in category.0.as_bytes() {
+        use std::fmt::Write;
+        write!(&mut encoded, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    format!("{prefix}.category-{encoded}.json")
 }
 
 fn now_epoch() -> u64 {
@@ -468,6 +560,8 @@ pub fn cache_dir() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Account;
+    use crate::redact::Redacted;
     use crate::xtream::StreamId;
 
     fn stream(id: u64, name: &str) -> LiveStream {
@@ -601,6 +695,79 @@ mod tests {
         assert_eq!(results.len(), 4); // adult hidden
         let capped = search(&streams, "", &ResolveOptions::default(), 2);
         assert_eq!(capped.len(), 2);
+    }
+
+    #[test]
+    fn search_page_reports_total_and_only_clones_the_requested_page() {
+        let streams = catalog();
+        let page = search_page(&streams, "", &ResolveOptions::default(), 1, 2);
+        assert_eq!(page.total, 4); // adult hidden before pagination
+        assert_eq!(page.matches.len(), 2);
+
+        let remainder = search_page(&streams, "", &ResolveOptions::default(), 3, 20);
+        assert_eq!(remainder.total, 4);
+        assert_eq!(remainder.matches.len(), 1);
+
+        let past_end = search_page(&streams, "", &ResolveOptions::default(), 10, 20);
+        assert_eq!(past_end.total, 4);
+        assert!(past_end.matches.is_empty());
+    }
+
+    #[test]
+    fn category_cache_filename_cannot_escape_the_cache_directory() {
+        let file = category_cache_file("vod_streams", &CategoryId("../US Movies/4K".into()));
+        assert_eq!(
+            file,
+            "vod_streams.category-2e2e2f5553204d6f766965732f344b.json"
+        );
+        assert!(!file.contains('/'));
+    }
+
+    #[tokio::test]
+    async fn category_movie_fetch_is_scoped_filtered_and_cached() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/player_api.php")
+            .match_query(mockito::Matcher::AllOf(vec![
+                mockito::Matcher::UrlEncoded("action".into(), "get_vod_streams".into()),
+                mockito::Matcher::UrlEncoded("category_id".into(), "92".into()),
+            ]))
+            // Deliberately return a mixed-category fixture: the catalog must
+            // defend against panels that ignore the category_id parameter.
+            .with_body(include_str!("xtream/fixtures/vod_streams.json"))
+            .expect(1)
+            .create_async()
+            .await;
+        let source = MediaSource::new(
+            "test",
+            &Account {
+                host: server.url(),
+                username: "alice".into(),
+                password: Redacted::new("secret"),
+                user_agent: None,
+                m3u_url: None,
+            },
+        )
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let catalog = Catalog {
+            source: &source,
+            dir: dir.path().to_path_buf(),
+            ttl: DEFAULT_TTL,
+        };
+        let category = CategoryId("92".into());
+
+        let fetched = catalog.movies_in_category(&category, false).await.unwrap();
+        assert_eq!(fetched.len(), 1);
+        assert!(
+            fetched
+                .iter()
+                .all(|movie| movie.category_id.as_ref() == Some(&category))
+        );
+
+        let cached = catalog.movies_in_category(&category, false).await.unwrap();
+        assert_eq!(cached.len(), 1);
+        mock.assert_async().await;
     }
 
     #[test]

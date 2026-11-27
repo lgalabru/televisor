@@ -12,13 +12,23 @@ pub struct Params {
     #[serde(default)]
     pub query: String,
     #[schemars(
-        description = "Optional VOD category id or name to scope the search (categories differ from live TV's)."
+        description = "Optional VOD category id or case-insensitive name keyword to scope the search (categories differ from live TV's). Use query=\"\" with a category to list that category's movies."
     )]
     #[serde(default)]
     pub category: Option<String>,
-    #[schemars(description = "Maximum results to return. Default 20.")]
+    #[schemars(
+        description = "Maximum results to return per page. Default 20. Ignored when all=true."
+    )]
     #[serde(default = "default_max_results")]
     pub max_results: usize,
+    #[schemars(description = "Zero-based result offset for pagination. Default 0.")]
+    #[serde(default)]
+    pub offset: usize,
+    #[schemars(
+        description = "Return every match in one response. Default false. For a complete category listing, set category, query=\"\", and all=true."
+    )]
+    #[serde(default)]
+    pub all: bool,
     #[schemars(description = "Include adult-flagged movies. Default false.")]
     #[serde(default)]
     pub include_adult: bool,
@@ -59,32 +69,54 @@ pub async fn run(params: Params) -> Result<CallToolResult, rmcp::ErrorData> {
         Ok(category) => category,
         Err(message) => return Ok(super::tool_error(message)),
     };
-    let movies = match catalog.movies(params.refresh).await {
+    let movies = match category.as_ref() {
+        Some(category) => catalog.movies_in_category(category, params.refresh).await,
+        None => catalog.movies(params.refresh).await,
+    };
+    let movies = match movies {
         Ok(movies) => movies,
         Err(err) => return Ok(super::tool_err(err)),
     };
 
     let opts = ResolveOptions {
         include_adult: params.include_adult,
-        category,
+        category: category.clone(),
         ..Default::default()
     };
-    let all = catalog::search(&movies, &params.query, &opts, usize::MAX);
-    let matches: Vec<Match> = all
-        .iter()
-        .take(params.max_results.max(1))
+    if params.all && params.query.trim().is_empty() && category.is_none() {
+        return Ok(super::tool_error(
+            "Refusing an unscoped full-catalog response. Set category to a VOD category id/name keyword, or provide a non-empty query before using all=true.",
+        ));
+    }
+
+    let limit = if params.all {
+        usize::MAX
+    } else {
+        params.max_results.max(1)
+    };
+    let page = catalog::search_page(&movies, &params.query, &opts, params.offset, limit);
+    let total_matches = page.total;
+    let matches: Vec<Match> = page
+        .matches
+        .into_iter()
         .map(|m| Match {
             stream_id: m.stream_id.0,
-            name: m.name.clone(),
-            category_id: m.category_id.as_ref().map(|c| c.0.clone()),
+            name: m.name,
+            category_id: m.category_id.map(|c| c.0),
             rating: m.rating,
         })
         .collect();
+    let next_offset = params.offset.saturating_add(matches.len());
+    let has_more = next_offset < total_matches;
 
     Ok(super::tool_json(&serde_json::json!({
         "query": params.query,
-        "total_matches": all.len(),
+        "category": params.category,
+        "total_matches": total_matches,
+        "offset": params.offset,
         "returned": matches.len(),
+        "has_more": has_more,
+        "next_offset": has_more.then_some(next_offset),
         "matches": matches,
         "next_step": "Call get_movie_info for plot/cast/duration, or play_movie with a stream_id to start playback.",
     })))

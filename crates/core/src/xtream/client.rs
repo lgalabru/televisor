@@ -565,6 +565,27 @@ mod tests {
         assert_eq!(streams.len(), 3);
         mock.assert_async().await;
     }
+
+    #[tokio::test]
+    async fn vod_category_filter_is_forwarded() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/player_api.php")
+            .match_query(mockito::Matcher::AllOf(vec![
+                mockito::Matcher::UrlEncoded("action".into(), "get_vod_streams".into()),
+                mockito::Matcher::UrlEncoded("category_id".into(), "92".into()),
+            ]))
+            .with_body(include_str!("fixtures/vod_streams.json"))
+            .create_async()
+            .await;
+
+        let movies = client(&server.url())
+            .vod_streams(Some(&CategoryId("92".into())))
+            .await
+            .unwrap();
+        assert_eq!(movies.len(), 3);
+        mock.assert_async().await;
+    }
 }
 
 #[cfg(all(test, feature = "test-network"))]

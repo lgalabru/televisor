@@ -96,8 +96,10 @@ stream URL is returned. If the user reports no video, retry once with format=\"t
 
     #[tool(
         description = "Search movies (VOD) by name substring, optionally scoped to a VOD \
-category. Returns ranked matches with stream_ids plus the total match count. This is the \
-discovery step before play_movie. Results come from a local cache (~24h TTL)."
+category id or name keyword. Set query=\"\" with a category to list movies in that category; \
+set all=true for the complete category or use offset/max_results to page through it. Returns \
+ranked matches with stream_ids plus the total match count. Category searches fetch/cache only \
+that category for speed. This is the discovery step before play_movie."
     )]
     async fn search_movies(
         &self,

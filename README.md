@@ -39,6 +39,8 @@ televisor play bbc one --at "2026-07-15 20:00" --duration 90   # catch-up replay
 televisor channels --archive         # channels with replay (shown as [replay 3d])
 
 televisor movies dune                # search VOD
+televisor movies --category comedy  # list every movie in a matching VOD category
+televisor movies dune --category 4k # search only within a matching VOD category
 televisor movies --recent            # latest additions
 televisor info dune                  # plot, rating, cast, duration, trailer
 televisor play --movie dune          # play a movie
@@ -68,7 +70,7 @@ Live TV (search, categories, play, favorites) works from the parsed playlist; VO
 
 ## MCP server (Claude / Codex)
 
-`televisor mcp` serves MCP on stdio with twelve tools: `list_accounts`, `get_status`, `list_categories`, `search_channels` (with archive flags), `play_channel` (live or catch-up via `at`), `get_epg`, `search_movies`, `get_movie_info`, `play_movie`, `search_series`, `get_series_episodes`, `play_episode`. Playback launches your player locally — stream URLs (which embed panel credentials) are never returned to the model, and account credentials can only be managed via the CLI.
+`televisor mcp` serves MCP on stdio with twelve tools: `list_accounts`, `get_status`, `list_categories`, `search_channels` (with archive flags), `play_channel` (live or catch-up via `at`), `get_epg`, `search_movies`, `get_movie_info`, `play_movie`, `search_series`, `get_series_episodes`, `play_episode`. `search_movies` accepts a VOD category id/name keyword; use an empty query plus `all: true` to return that category's complete movie list, or `offset`/`max_results` to page through it. Playback launches your player locally — stream URLs (which embed panel credentials) are never returned to the model, and account credentials can only be managed via the CLI.
 
 `televisor setup` installs the server into `~/.claude.json` (Claude Code), Claude Desktop, and `~/.codex/config.toml` (Codex) — idempotent, additive, and pointing at the current binary. Manual config, if you prefer:
 
