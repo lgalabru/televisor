@@ -47,6 +47,7 @@ impl AddCommand {
                 kind,
                 id,
                 name: name.clone(),
+                image: None,
             },
         );
         file.save()?;

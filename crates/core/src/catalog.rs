@@ -72,8 +72,9 @@ impl MediaItem for Series {
 
 // v2: LiveStream gained tv_archive fields; v3: VodStream/Series gained
 // rating/plot/genre; v4: LiveStream.direct_source + Series.last_modified.
+// v5: artwork (stream_icon, cover, backdrop_path).
 // Old caches would read as metadata-less — force refetch.
-const CACHE_VERSION: u32 = 4;
+const CACHE_VERSION: u32 = 5;
 pub const DEFAULT_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Debug, Error)]
@@ -122,11 +123,17 @@ pub struct Catalog<'a> {
 
 impl<'a> Catalog<'a> {
     pub fn new(source: &'a MediaSource, account_name: &str) -> Result<Self> {
-        Ok(Self {
+        Ok(Self::at(source, cache_dir()?.join(account_name)))
+    }
+
+    /// Catalog cached in an explicit directory. Sandboxed hosts (the tvOS
+    /// app) have no `$HOME/.cache` and must point at their own caches folder.
+    pub fn at(source: &'a MediaSource, dir: PathBuf) -> Self {
+        Self {
             source,
-            dir: cache_dir()?.join(account_name),
+            dir,
             ttl: DEFAULT_TTL,
-        })
+        }
     }
 
     pub async fn categories(&self, refresh: bool) -> Result<Vec<Category>> {
@@ -575,6 +582,7 @@ mod tests {
             tv_archive: false,
             tv_archive_duration: None,
             direct_source: None,
+            stream_icon: None,
         }
     }
 

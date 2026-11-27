@@ -102,7 +102,7 @@ pub fn categories_of(streams: &[LiveStream]) -> Vec<Category> {
 /// skipped — provider playlists are as sloppy as their JSON.
 pub fn parse_m3u(text: &str) -> Vec<LiveStream> {
     let mut streams = Vec::new();
-    let mut pending: Option<(String, Option<String>, Option<String>)> = None; // (name, group, tvg_id)
+    let mut pending: Option<Extinf> = None;
 
     for line in text.lines() {
         let line = line.trim();
@@ -117,11 +117,23 @@ pub fn parse_m3u(text: &str) -> Vec<LiveStream> {
                 .unwrap_or_else(|| "(unnamed)".to_string());
             let group = attr(extinf, "group-title");
             let tvg_id = attr(extinf, "tvg-id");
-            pending = Some((name, group, tvg_id));
+            let tvg_logo = attr(extinf, "tvg-logo");
+            pending = Some(Extinf {
+                name,
+                group,
+                tvg_id,
+                tvg_logo,
+            });
         } else if line.starts_with('#') {
             // #EXTGRP, #EXTVLCOPT, comments — ignored.
             continue;
-        } else if let Some((name, group, tvg_id)) = pending.take() {
+        } else if let Some(Extinf {
+            name,
+            group,
+            tvg_id,
+            tvg_logo,
+        }) = pending.take()
+        {
             let group = group.unwrap_or_else(|| UNCATEGORIZED.to_string());
             let adult = is_adult_heuristic(&name, &group);
             streams.push(LiveStream {
@@ -135,10 +147,19 @@ pub fn parse_m3u(text: &str) -> Vec<LiveStream> {
                 tv_archive: false,
                 tv_archive_duration: None,
                 direct_source: Some(line.to_string()),
+                stream_icon: tvg_logo,
             });
         }
     }
     streams
+}
+
+/// The last `#EXTINF` line, waiting for the URL line that completes it.
+struct Extinf {
+    name: String,
+    group: Option<String>,
+    tvg_id: Option<String>,
+    tvg_logo: Option<String>,
 }
 
 /// `key="value"` attribute lookup inside an `#EXTINF` line.
@@ -192,6 +213,11 @@ http://host.example/live/alice/hunter2/1.ts
         assert_eq!(streams.len(), 3); // orphaned EXTINF dropped
         assert_eq!(streams[0].name, "US: FOX SPORTS 1");
         assert_eq!(streams[0].epg_channel_id.as_deref(), Some("FoxSports1.us"));
+        assert_eq!(
+            streams[0].stream_icon.as_deref(),
+            Some("http://img/fs1.png")
+        );
+        assert_eq!(streams[1].stream_icon, None);
         assert_eq!(streams[0].category_id, Some(CategoryId("US Sports".into())));
         assert_eq!(
             streams[0].direct_source.as_deref(),

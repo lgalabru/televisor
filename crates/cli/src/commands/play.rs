@@ -318,6 +318,11 @@ impl PlayCommand {
                 record_play_best_effort(account, record);
                 Ok(())
             }
+            // Shows are bookmarked, never played: history holds episodes.
+            MediaKind::Series => {
+                eprintln!("The last entry is a show, not something playable — play an episode.");
+                std::process::exit(1);
+            }
         }
     }
 

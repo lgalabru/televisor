@@ -130,6 +130,9 @@ pub struct LiveStream {
     /// credentials — never log or expose it unredacted.
     #[serde(default, deserialize_with = "de::opt_string_flex")]
     pub direct_source: Option<String>,
+    /// Channel logo URL (`tvg-logo` on M3U playlists).
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub stream_icon: Option<String>,
 }
 
 /// One entry of `get_vod_streams`. `container_extension` (mkv/mp4/…) is
@@ -149,6 +152,9 @@ pub struct VodStream {
     pub is_adult: bool,
     #[serde(default, deserialize_with = "de::opt_i64_flex")]
     pub added: Option<i64>,
+    /// Poster URL.
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub stream_icon: Option<String>,
 }
 
 /// One entry of `get_series` — a show, not a playable stream. Episodes come
@@ -182,6 +188,12 @@ pub struct Series {
     /// an "added" timestamp.
     #[serde(default, deserialize_with = "de::opt_i64_flex")]
     pub last_modified: Option<i64>,
+    /// Poster URL.
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub cover: Option<String>,
+    /// Wide artwork; panels send a string or an array of URLs.
+    #[serde(default, deserialize_with = "de::opt_first_string")]
+    pub backdrop_path: Option<String>,
 }
 
 impl Series {
@@ -228,6 +240,12 @@ pub struct VodInfo {
     releasedate_snake: Option<String>,
     #[serde(default, deserialize_with = "de::opt_string_flex")]
     pub youtube_trailer: Option<String>,
+    /// Poster URL.
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub movie_image: Option<String>,
+    /// Wide artwork; panels send a string or an array of URLs.
+    #[serde(default, deserialize_with = "de::opt_first_string")]
+    pub backdrop_path: Option<String>,
 }
 
 impl VodInfo {
@@ -242,8 +260,28 @@ impl VodInfo {
 /// Response of `get_series_info&series_id=X`, slimmed to the episode list.
 #[derive(Debug, Clone, Deserialize)]
 pub struct SeriesInfo {
+    /// Show-level metadata. Some panels send `[]` instead of an object.
+    #[serde(default, deserialize_with = "de::opt_lenient")]
+    pub info: Option<SeriesDetail>,
     #[serde(default)]
     episodes: Option<EpisodesRepr>,
+}
+
+/// The `info` block of `get_series_info`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SeriesDetail {
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub plot: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub cast: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub genre: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_f64_flex")]
+    pub rating: Option<f64>,
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub cover: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_first_string")]
+    pub backdrop_path: Option<String>,
 }
 
 /// Panels disagree on the `episodes` shape: most key an object by season
@@ -282,6 +320,23 @@ pub struct Episode {
     pub season: Option<i64>,
     #[serde(default, deserialize_with = "de::opt_i64_flex")]
     pub episode_num: Option<i64>,
+    /// Per-episode metadata. Some panels send `[]` instead of an object.
+    #[serde(default, deserialize_with = "de::opt_lenient")]
+    pub info: Option<EpisodeInfo>,
+}
+
+/// The `info` block of one episode.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct EpisodeInfo {
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub plot: Option<String>,
+    /// Still image URL.
+    #[serde(default, deserialize_with = "de::opt_string_flex")]
+    pub movie_image: Option<String>,
+    #[serde(default, deserialize_with = "de::opt_i64_flex")]
+    pub duration_secs: Option<i64>,
+    #[serde(default, deserialize_with = "de::opt_f64_flex")]
+    pub rating: Option<f64>,
 }
 
 /// Wrapper of `get_short_epg` / `get_simple_data_table` responses.

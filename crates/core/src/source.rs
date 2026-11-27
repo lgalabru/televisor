@@ -123,6 +123,7 @@ mod tests {
             tv_archive: false,
             tv_archive_duration: None,
             direct_source: Some("http://media.example/ch.ts".to_string()),
+            stream_icon: None,
         };
         let url = source.live_stream_url(&stream, StreamFormat::M3u8).unwrap();
         assert_eq!(url.as_str(), "http://media.example/ch.ts");

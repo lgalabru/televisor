@@ -113,6 +113,36 @@ pub fn opt_b64_string<'de, D: Deserializer<'de>>(de: D) -> Result<Option<String>
     Ok(Some(decoded.unwrap_or(raw)))
 }
 
+/// Artwork fields like `backdrop_path` arrive as a string, an array of
+/// strings, `[]`, or `null` depending on the panel. Returns the first
+/// non-empty URL.
+pub fn opt_first_string<'de, D: Deserializer<'de>>(de: D) -> Result<Option<String>, D::Error> {
+    let value = Option::<serde_json::Value>::deserialize(de)?;
+    let first = match value {
+        Some(serde_json::Value::String(s)) => Some(s),
+        Some(serde_json::Value::Array(items)) => items.into_iter().find_map(|item| match item {
+            serde_json::Value::String(s) if !s.trim().is_empty() => Some(s),
+            _ => None,
+        }),
+        _ => None,
+    };
+    Ok(first.filter(|s| !s.trim().is_empty()))
+}
+
+/// Nested metadata objects (`episode.info`, `series_info.info`) that some
+/// panels replace with `[]` or a string when empty. Anything that is not a
+/// well-formed object becomes `None` instead of failing the whole response.
+pub fn opt_lenient<'de, D, T>(de: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let value = Option::<serde_json::Value>::deserialize(de)?;
+    Ok(value
+        .filter(serde_json::Value::is_object)
+        .and_then(|object| serde_json::from_value(object).ok()))
+}
+
 #[cfg(test)]
 mod tests {
     use serde::Deserialize;
@@ -165,6 +195,51 @@ mod tests {
         assert_eq!(probe(r#"{"text": ""}"#).text, None);
         assert_eq!(probe(r#"{"text": null}"#).text, None);
         assert_eq!(probe(r#"{}"#).text, None);
+    }
+
+    #[test]
+    fn first_string_takes_strings_arrays_and_drops_empties() {
+        #[derive(Deserialize)]
+        struct Art {
+            #[serde(default, deserialize_with = "super::opt_first_string")]
+            backdrop: Option<String>,
+        }
+        let art = |json: &str| serde_json::from_str::<Art>(json).unwrap().backdrop;
+        assert_eq!(
+            art(r#"{"backdrop": "http://a"}"#).as_deref(),
+            Some("http://a")
+        );
+        assert_eq!(
+            art(r#"{"backdrop": ["", "http://b", "http://c"]}"#).as_deref(),
+            Some("http://b")
+        );
+        assert_eq!(art(r#"{"backdrop": []}"#), None);
+        assert_eq!(art(r#"{"backdrop": [""]}"#), None);
+        assert_eq!(art(r#"{"backdrop": " "}"#), None);
+        assert_eq!(art(r#"{"backdrop": 7}"#), None);
+        assert_eq!(art(r#"{"backdrop": null}"#), None);
+        assert_eq!(art(r#"{}"#), None);
+    }
+
+    #[test]
+    fn lenient_object_survives_panels_sending_arrays() {
+        #[derive(Deserialize)]
+        struct Inner {
+            #[serde(default, deserialize_with = "super::opt_string_flex")]
+            plot: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct Outer {
+            #[serde(default, deserialize_with = "super::opt_lenient")]
+            info: Option<Inner>,
+        }
+        let outer = |json: &str| serde_json::from_str::<Outer>(json).unwrap().info;
+        let full = outer(r#"{"info": {"plot": "p"}}"#).expect("object parses");
+        assert_eq!(full.plot.as_deref(), Some("p"));
+        assert!(outer(r#"{"info": []}"#).is_none());
+        assert!(outer(r#"{"info": "n/a"}"#).is_none());
+        assert!(outer(r#"{"info": null}"#).is_none());
+        assert!(outer(r#"{}"#).is_none());
     }
 
     #[test]

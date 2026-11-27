@@ -27,6 +27,9 @@ pub enum MediaKind {
     Movie,
     /// One playable episode (`id` is the episode id).
     Episode,
+    /// A whole show (`id` is the series id), bookmarked to follow. Not
+    /// playable itself: frontends play its episodes.
+    Series,
 }
 
 impl fmt::Display for MediaKind {
@@ -35,6 +38,7 @@ impl fmt::Display for MediaKind {
             MediaKind::Live => "live",
             MediaKind::Movie => "movie",
             MediaKind::Episode => "episode",
+            MediaKind::Series => "series",
         })
     }
 }
@@ -46,9 +50,10 @@ impl FromStr for MediaKind {
         match s.to_ascii_lowercase().as_str() {
             "live" | "channel" => Ok(MediaKind::Live),
             "movie" | "vod" => Ok(MediaKind::Movie),
-            "episode" | "series" => Ok(MediaKind::Episode),
+            "episode" => Ok(MediaKind::Episode),
+            "series" | "show" => Ok(MediaKind::Series),
             other => Err(format!(
-                "unknown kind '{other}' — use live, movie, or episode"
+                "unknown kind '{other}' — use live, movie, episode, or series"
             )),
         }
     }
@@ -59,6 +64,9 @@ pub struct Favorite {
     pub kind: MediaKind,
     pub id: u64,
     pub name: String,
+    /// Artwork URL, so frontends can draw the favorite without a lookup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,6 +77,9 @@ pub struct PlayRecord {
     /// Container extension needed to rebuild episode/movie URLs on replay.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ext: Option<String>,
+    /// Artwork URL, so frontends can draw the entry without a lookup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
     pub played_at: u64,
 }
 
@@ -79,8 +90,14 @@ impl PlayRecord {
             id,
             name: name.into(),
             ext,
+            image: None,
             played_at: now_epoch(),
         }
+    }
+
+    pub fn with_image(mut self, image: Option<String>) -> Self {
+        self.image = image;
+        self
     }
 }
 
@@ -113,11 +130,15 @@ impl StateFile {
         Ok(Self { path, state })
     }
 
-    /// Idempotent: re-adding an existing favorite is a no-op. Returns
-    /// whether it was newly added.
+    /// Idempotent: re-adding an existing favorite (same kind and id, even
+    /// if its name or artwork changed since) is a no-op. Returns whether it
+    /// was newly added.
     pub fn add_favorite(&mut self, account: &str, favorite: Favorite) -> bool {
         let list = self.state.favorites.entry(account.to_string()).or_default();
-        if list.contains(&favorite) {
+        if list
+            .iter()
+            .any(|existing| existing.kind == favorite.kind && existing.id == favorite.id)
+        {
             return false;
         }
         list.push(favorite);
@@ -218,15 +239,43 @@ mod tests {
     }
 
     #[test]
+    fn kinds_parse_and_print_symmetrically() {
+        for kind in [
+            MediaKind::Live,
+            MediaKind::Movie,
+            MediaKind::Episode,
+            MediaKind::Series,
+        ] {
+            assert_eq!(kind.to_string().parse::<MediaKind>(), Ok(kind));
+        }
+        assert_eq!("show".parse::<MediaKind>(), Ok(MediaKind::Series));
+        assert_eq!("channel".parse::<MediaKind>(), Ok(MediaKind::Live));
+        assert!("podcast".parse::<MediaKind>().is_err());
+    }
+
+    #[test]
     fn favorites_roundtrip_dedupe_and_remove() {
         let (dir, mut file) = state_file();
         let fav = Favorite {
             kind: MediaKind::Live,
             id: 429586,
             name: "US: FOX SPORTS 1".to_string(),
+            image: None,
         };
         assert!(file.add_favorite("trial", fav.clone()));
         assert!(!file.add_favorite("trial", fav.clone())); // idempotent
+        let renamed = Favorite {
+            name: "FS1".to_string(),
+            image: Some("http://img/fs1.png".to_string()),
+            ..fav.clone()
+        };
+        assert!(!file.add_favorite("trial", renamed)); // same kind+id
+        let show = Favorite {
+            kind: MediaKind::Series,
+            ..fav.clone()
+        };
+        assert!(file.add_favorite("trial", show)); // same id, other kind
+        assert!(file.remove_favorite("trial", MediaKind::Series, fav.id));
         file.save().unwrap();
 
         let reloaded = StateFile::open_at(dir.path().join("state.toml")).unwrap();
