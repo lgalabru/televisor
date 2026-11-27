@@ -1,0 +1,4 @@
+module TelevisorFFI {
+    header "televisor.h"
+    export *
+}

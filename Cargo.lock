@@ -1925,6 +1925,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "televisor-ffi"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "mockito",
+ "serde",
+ "serde_json",
+ "televisor-core",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "televisor-mcp"
 version = "0.1.0"
 dependencies = [

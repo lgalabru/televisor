@@ -1,0 +1,21 @@
+[package]
+name = "televisor-ffi"
+version.workspace = true
+edition.workspace = true
+description = "C ABI over televisor-core for native frontends (the Apple TV app)"
+
+[lib]
+# staticlib for Xcode to link; rlib so `cargo test` can exercise the bridge.
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+televisor-core = { path = "../core" }
+
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+mockito.workspace = true
+tempfile.workspace = true
