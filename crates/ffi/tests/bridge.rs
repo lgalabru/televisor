@@ -176,6 +176,18 @@ fn bridge_flow_against_a_fake_panel() {
     assert_eq!(ok(favorite(true)).as_array().unwrap().len(), 1);
     assert!(ok(favorite(false)).as_array().unwrap().is_empty());
 
+    // Old movie favorites did not store their container extension. Playing
+    // one repairs it from the catalog instead of silently constructing an
+    // incorrect .mp4 URL; the repaired value also lands in history.
+    let movies = mock_action(&mut server, "get_vod_streams", fixture("vod_streams.json")).expect(1);
+    let playback = ok(json!({"method": "play", "params": {
+        "kind": "movie", "id": 2024998, "name": "4K-TOP - Michael (2026)",
+    }}));
+    assert!(playback["url"].as_str().unwrap().ends_with("/2024998.mkv"));
+    let history = ok(json!({"method": "history"}));
+    assert_eq!(history[0]["ext"], "mkv");
+    movies.assert();
+
     // Shows are bookmarked like favorites, and are never playable.
     let shows = ok(json!({"method": "set_favorite", "params": {
         "kind": "series", "id": 48173, "name": "Breaking Bad", "is_favorite": true,
@@ -191,4 +203,44 @@ fn bridge_flow_against_a_fake_panel() {
     // Closing ends the session.
     ok(json!({"method": "close"}));
     assert_eq!(error_kind(json!({"method": "history"})), "not_signed_in");
+}
+
+/// Remuxing needs no session; its failures tell the app to use VLC.
+#[test]
+fn remux_open_reports_what_the_app_falls_back_on() {
+    assert_eq!(
+        error_kind(json!({"method": "remux_open", "params": {"url": "not a url"}})),
+        "invalid_request"
+    );
+    assert_eq!(
+        error_kind(json!({"method": "remux_open", "params": {"url": "file:///etc/hosts"}})),
+        "invalid_request"
+    );
+
+    let mut server = mockito::Server::new();
+    let _avi = server
+        .mock("GET", "/movie/alice/hunter2/7.mkv")
+        .with_status(206)
+        .with_header("content-range", "bytes 0-15/16")
+        .with_body("RIFF....AVI LIST")
+        .create();
+    let url = format!("{}/movie/alice/hunter2/7.mkv", server.url());
+    assert_eq!(
+        error_kind(json!({"method": "remux_open", "params": {"url": url}})),
+        "unsupported"
+    );
+
+    let _down = server
+        .mock("GET", "/movie/alice/hunter2/8.mkv")
+        .with_status(503)
+        .create();
+    let url = format!("{}/movie/alice/hunter2/8.mkv", server.url());
+    assert_eq!(
+        error_kind(json!({"method": "remux_open", "params": {"url": url}})),
+        "network"
+    );
+
+    let stale =
+        json!({"method": "remux_close", "params": {"url": "http://127.0.0.1:1/x/index.m3u8"}});
+    assert_eq!(ok(stale), Value::Null);
 }

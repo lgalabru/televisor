@@ -45,6 +45,9 @@ struct Item: Codable, Sendable, Hashable, Identifiable {
     let addedAt: Int64?
     let ext: String?
     let hasArchive: Bool
+    /// The panel category listing it. Absent in recent searches saved
+    /// before it existed, and from history entries.
+    var categoryId: String? = nil
 
     var title: DisplayTitle { DisplayTitle(name, library: library) }
 }
@@ -129,6 +132,11 @@ struct NowNext: Decodable, Sendable {
 struct Playback: Decodable, Sendable {
     let url: String
     let isLive: Bool
+}
+
+/// A Matroska title served as HLS on loopback (see `crates/remux`).
+struct RemuxedStream: Decodable, Sendable {
+    let url: String
 }
 
 /// A favorite or a history entry.

@@ -14,6 +14,8 @@ enum Bridge {
         case epgNow = "epg_now"
         case setFavorite = "set_favorite"
         case sportsToday = "sports_today"
+        case remuxOpen = "remux_open"
+        case remuxClose = "remux_close"
     }
 
     struct NoParams: Encodable, Sendable {}
@@ -125,6 +127,7 @@ struct BridgeError: Error, Decodable, Sendable, Equatable {
         case liveOnly = "live_only"
         case notFound = "not_found"
         case storage
+        case unsupported
     }
 
     let kind: Kind
@@ -143,6 +146,7 @@ struct BridgeError: Error, Decodable, Sendable, Equatable {
         case .storage: "Storage Problem"
         case .notSignedIn: "Signed Out"
         case .invalidRequest: "Something Went Wrong"
+        case .unsupported: "Can’t Play This"
         }
     }
 
@@ -158,6 +162,7 @@ struct BridgeError: Error, Decodable, Sendable, Equatable {
         case .storage: "Apple TV couldn’t save data. Free up space and try again."
         case .notSignedIn: "Sign in again to continue."
         case .invalidRequest: message
+        case .unsupported: message
         }
     }
 }

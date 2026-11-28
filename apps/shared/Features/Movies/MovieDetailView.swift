@@ -42,6 +42,8 @@ struct MovieDetailView: View {
                 }
             }
             FavoriteToggle(kind: .movie, id: item.id, name: item.name, image: item.image)
+        } below: {
+            ParentCategoryLink(item: item)
         }
         .task {
             // The page works from the listing alone; detail only enriches it.

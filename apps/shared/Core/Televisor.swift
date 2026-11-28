@@ -102,6 +102,20 @@ enum Televisor {
         ))
     }
 
+    /// Serve a Matroska title (`url` from `play`) as HLS on loopback, for
+    /// AVPlayer. Throws `.unsupported` when only VLC can play it.
+    static func remuxOpen(_ url: URL) async throws -> RemuxedStream {
+        struct Params: Encodable, Sendable { let url: String }
+        return try await Bridge.call(.remuxOpen, Params(url: url.absoluteString))
+    }
+
+    /// Stop serving the remuxed title at `url`; a no-op if a newer title
+    /// replaced it.
+    static func remuxClose(_ url: URL) async throws {
+        struct Params: Encodable, Sendable { let url: String }
+        let _: Bridge.Empty = try await Bridge.call(.remuxClose, Params(url: url.absoluteString))
+    }
+
     /// Big games live now or soon, each with the channels carrying it.
     /// Channels whose name starts with `region` (like "FR") come first.
     static func sportsToday(region: String?) async throws -> [Game] {

@@ -21,6 +21,15 @@ struct PlaybackSession {
     let isLive: Bool
     /// Where to resume, in seconds; nil starts at the beginning.
     let startSeconds: Double?
+    /// `url` is the remuxer's loopback playlist, not the panel's file.
+    var isRemuxed = false
+
+    /// The same title, played from the remuxer at `url`.
+    func remuxed(at url: URL) -> PlaybackSession {
+        var session = PlaybackSession(url: url, request: request, isLive: isLive, startSeconds: startSeconds)
+        session.isRemuxed = true
+        return session
+    }
 }
 
 /// App-wide state: who is signed in, their favorites and history, and
@@ -47,6 +56,11 @@ final class AppModel {
     private(set) var player: (any PlaybackController)?
     var presentation: PlayerPresentation = .fullScreen
     private var playerOutcomes: Task<Void, Never>?
+    /// The remuxer's playlist while it serves the current title.
+    private var remuxedURL: URL?
+    /// Bumped whenever playback stops, so a title that finishes opening
+    /// after the viewer moved on is dropped.
+    private var playbackGeneration = 0
     /// The channel-name prefix ("FR", "US") pinned first in Live TV and
     /// ranked first among a game's feeds.
     var region: String = UserDefaults.standard.string(forKey: AppModel.regionKey) ?? AppModel.regionDefault {
@@ -81,7 +95,8 @@ final class AppModel {
         switch lastFailure?.kind {
         case nil, .authFailed, .invalidHost, .invalidRequest, .notSignedIn:
             phase = .signedOut
-        case .network, .server, .paymentRequired, .liveOnly, .notFound, .storage:
+        // `unsupported` only comes from remuxing; never from signing in.
+        case .network, .server, .paymentRequired, .liveOnly, .notFound, .storage, .unsupported:
             phase = .unreachable(lastFailure!)
         }
     }
@@ -200,7 +215,7 @@ final class AppModel {
                 positions.setLastEpisode(request.id, ofSeries: seriesId)
             }
             let resume = playback.isLive ? nil : positions.mark(request.kind, request.id)?.seconds
-            start(
+            await start(
                 PlaybackSession(url: url, request: request, isLive: playback.isLive, startSeconds: resume),
                 presentation: docked ? .docked : .fullScreen
             )
@@ -211,23 +226,70 @@ final class AppModel {
     }
 
     func stopPlayback() {
+        playbackGeneration += 1
         playerOutcomes?.cancel()
         playerOutcomes = nil
         player?.stop()
         player = nil
         presentation = .fullScreen
+        if remuxedURL != nil {
+            // Frees the panel connection. Closing by URL makes a late
+            // close harmless to a newer title; a failed close leaves a
+            // server idle until the next title replaces it.
+            Task { await closeRemux() }
+        }
     }
 
+    /// `session` is always the panel's stream: a remuxed title that fails
+    /// falls back to VLC on it.
     private func start(
         _ session: PlaybackSession,
         presentation: PlayerPresentation,
-        engine: PlaybackEngine? = nil
-    ) {
+        engine requested: PlaybackEngine? = nil
+    ) async {
         stopPlayback()
-        let engine = engine ?? PlaybackEngine.preferred(for: session.request)
-        let controller: any PlaybackController
+        let generation = playbackGeneration
+        var engine = requested ?? PlaybackEngine.preferred(
+            for: session.request, resolvedURL: session.url
+        )
+        var playing = session
+        if engine == .remux {
+            let remuxed = await openRemux(session)
+            guard generation == playbackGeneration else {
+                // The viewer stopped or picked another title meanwhile.
+                if let remuxed {
+                    try? await Televisor.remuxClose(remuxed.url)
+                }
+                return
+            }
+            if let remuxed {
+                playing = remuxed
+                remuxedURL = remuxed.url
+            } else {
+                engine = .vlc
+            }
+        }
+        let controller = makeController(engine == .vlc ? session : playing, engine: engine)
+        self.presentation = presentation
+        player = controller
+        watch(controller, session: session, fallsBackToVLC: engine != .vlc)
+    }
+
+    /// The title served as HLS by the remuxer, or nil when only VLC can
+    /// play it (a codec AVFoundation lacks, no keyframe index).
+    private func openRemux(_ session: PlaybackSession) async -> PlaybackSession? {
+        guard let stream = try? await Televisor.remuxOpen(session.url) else {
+            return nil
+        }
+        guard let url = URL(string: stream.url) else {
+            preconditionFailure("the remuxer always returns a URL")
+        }
+        return session.remuxed(at: url)
+    }
+
+    private func makeController(_ session: PlaybackSession, engine: PlaybackEngine) -> any PlaybackController {
         switch engine {
-        case .system:
+        case .system, .remux:
             let system = PlayerController(session: session, positions: positions)
             system.onPictureInPicture = { [weak self] isActive in
                 self?.pictureInPictureChanged(isActive)
@@ -235,12 +297,13 @@ final class AppModel {
             system.onRestore = { [weak self] in
                 self?.presentation = .fullScreen
             }
-            controller = system
+            return system
         case .vlc:
-            controller = VLCPlayerController(session: session, positions: positions)
+            return VLCPlayerController(session: session, positions: positions)
         }
-        self.presentation = presentation
-        player = controller
+    }
+
+    private func watch(_ controller: any PlaybackController, session: PlaybackSession, fallsBackToVLC: Bool) {
         playerOutcomes = Task { [weak self] in
             for await outcome in controller.outcomes() {
                 guard let self, self.player === controller else { return }
@@ -250,8 +313,9 @@ final class AppModel {
                 case .failed(let reason):
                     // AVFoundation refuses more than VLC does: give the
                     // stream a second chance before telling the viewer.
-                    if engine == .system {
-                        self.start(session, presentation: self.presentation, engine: .vlc)
+                    if fallsBackToVLC {
+                        await self.closeRemux()
+                        await self.start(session, presentation: self.presentation, engine: .vlc)
                     } else {
                         self.stopPlayback()
                         self.alert = BridgeError(kind: .server, message: await self.explainFailure(reason))
@@ -259,6 +323,14 @@ final class AppModel {
                 }
             }
         }
+    }
+
+    /// Waits for the remuxer to let go of the panel connection, so VLC
+    /// taking over doesn't open a second one the plan would refuse.
+    private func closeRemux() async {
+        guard let url = remuxedURL else { return }
+        remuxedURL = nil
+        try? await Televisor.remuxClose(url)
     }
 
     /// The usual reason a stream won't start is the plan's screen limit:

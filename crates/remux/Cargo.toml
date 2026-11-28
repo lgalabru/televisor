@@ -1,0 +1,16 @@
+[package]
+name = "televisor-remux"
+version.workspace = true
+edition.workspace = true
+description = "Matroska to HLS (fragmented MP4) on the device, so AVPlayer can play .mkv titles"
+
+[dependencies]
+reqwest.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tracing-subscriber.workspace = true

@@ -12,6 +12,7 @@
 
 pub mod error;
 pub mod protocol;
+mod remux;
 mod session;
 
 use std::ffi::{CStr, CString, c_char};
@@ -102,6 +103,11 @@ async fn handle(request: Request) -> Result<serde_json::Value> {
         Request::Epg { stream_id, limit } => json(&session()?.epg(stream_id, limit).await?),
         Request::EpgNow { stream_ids } => json(&session()?.epg_now(&stream_ids).await?),
         Request::Play(params) => json(&session()?.play(params).await?),
+        Request::RemuxOpen { url } => json(&remux::open(&url).await?),
+        Request::RemuxClose { url } => {
+            remux::close(Some(&url));
+            json(&())
+        }
         Request::History => json(&session()?.history()?),
         Request::Favorites => json(&session()?.favorites()?),
         Request::SetFavorite(params) => json(&session()?.set_favorite(params)?),

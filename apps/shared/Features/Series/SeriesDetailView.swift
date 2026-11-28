@@ -33,6 +33,7 @@ struct SeriesDetailView: View {
             }
             FavoriteToggle(kind: .series, id: item.id, name: item.name, image: item.image)
         } below: {
+            ParentCategoryLink(item: item)
             if let detail, !detail.seasons.isEmpty {
                 seasons(detail.seasons)
             } else if let failure {

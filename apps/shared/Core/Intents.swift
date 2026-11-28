@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import SwiftUI
 
 /// Requests from outside the app's own UI (Siri today) for the app to show
 /// something. Views watch it and move there.
@@ -16,8 +17,8 @@ final class AppRouter {
     /// A query to run on the Search tab, consumed when Search shows it.
     var pendingSearch: String?
     /// The Search tab's navigation, so picking a result can be recorded
-    /// before it opens (see SearchView).
-    var searchPath: [Item] = []
+    /// before it opens (see SearchView): titles and their categories.
+    var searchPath = NavigationPath()
 
     func search(_ query: String) {
         pendingSearch = query

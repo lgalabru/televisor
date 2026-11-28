@@ -89,7 +89,9 @@ final class PlayerController: NSObject, PlaybackController {
         item.canUseNetworkResourcesForLiveStreamingWhilePaused = session.isLive
         player = AVPlayer(playerItem: item)
         // AirPlay hands the URL to the Apple TV, which streams it itself.
-        player.allowsExternalPlayback = true
+        // A remuxed title's URL is loopback, meaningless there: AirPlay
+        // sends the rendered video instead.
+        player.allowsExternalPlayback = !session.isRemuxed
         super.init()
         viewController.player = player
         #if os(iOS)
@@ -195,7 +197,8 @@ final class PlayerController: NSObject, PlaybackController {
     /// means for the viewer instead.
     nonisolated static func describe(_ error: (any Error)?, ext: String?) -> String {
         // `ext` stays for callers' sake; containers AVFoundation can't open
-        // never reach it: they go to VLC first (see PlaybackEngine).
+        // never reach it: they go to the remuxer or VLC first (see
+        // PlaybackEngine).
         _ = ext
         if let error = error as? URLError {
             return error.code == .userAuthenticationRequired

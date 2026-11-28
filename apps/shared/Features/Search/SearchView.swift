@@ -8,6 +8,7 @@ struct SearchView: View {
     @State private var query = ""
     @State private var results: SearchResults?
     @State private var isSearching = false
+    @FocusState private var isFieldFocused: Bool
 
     /// Typing on the on-screen keyboard is slow; this waits out a burst of
     /// letters without feeling laggy.
@@ -39,6 +40,7 @@ struct SearchView: View {
         }
         .scrollClipDisabled()
         .searchable(text: $query, prompt: "Channels, Movies and Shows")
+        .keyboardDismissal(isFieldFocused: $isFieldFocused)
         .task(id: query) { await search() }
         // A query from Siri lands here (see AppRouter).
         .onAppear(perform: takePendingSearch)
@@ -104,7 +106,20 @@ struct SearchView: View {
             case .movies: FavoriteButton(kind: .movie, id: item.id, name: item.name, image: item.image)
             case .series: FavoriteButton(kind: .series, id: item.id, name: item.name, image: item.image)
             }
+            if item.categoryId != nil {
+                Button {
+                    recent.record(item)
+                    Task { await openCategory(of: item) }
+                } label: {
+                    Label("Show Category", systemImage: "square.grid.2x2")
+                }
+            }
         }
+    }
+
+    private func openCategory(of item: Item) async {
+        guard let route = await CategoryRoute.parent(of: item) else { return }
+        AppRouter.shared.searchPath.append(route)
     }
 
     private func takePendingSearch() {
@@ -126,5 +141,27 @@ struct SearchView: View {
         let found = try? await Televisor.search(trimmed, limit: Self.resultsPerLibrary)
         guard !Task.isCancelled else { return }
         results = found ?? SearchResults(live: [], movies: [], series: [])
+    }
+}
+
+private extension View {
+    /// On iPhone the keyboard covers the results: scrolling them, the
+    /// keyboard's Search key or Done puts it away. tvOS has no such
+    /// keyboard.
+    @ViewBuilder
+    func keyboardDismissal(isFieldFocused: FocusState<Bool>.Binding) -> some View {
+        #if os(iOS)
+        searchFocused(isFieldFocused)
+            .onSubmit(of: .search) { isFieldFocused.wrappedValue = false }
+            .scrollDismissesKeyboard(.immediately)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { isFieldFocused.wrappedValue = false }
+                }
+            }
+        #else
+        self
+        #endif
     }
 }

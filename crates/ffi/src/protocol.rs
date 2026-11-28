@@ -67,6 +67,19 @@ pub enum Request {
     },
     /// Resolve a playback URL and record the play in history.
     Play(PlayParams),
+    /// Serve a Matroska title as HLS on loopback, so AVPlayer can play it.
+    /// `url` is a `play` result. Replaces any title already served: the
+    /// plan's one connection goes to the newest. Fails with `unsupported`
+    /// when the title needs VLC.
+    RemuxOpen {
+        url: String,
+    },
+    /// Stop serving the remuxed title at `url` (a `remux_open` result),
+    /// freeing the panel connection. Naming it keeps a late close from
+    /// stopping a newer title; a stale `url` is a no-op.
+    RemuxClose {
+        url: String,
+    },
     History,
     Favorites,
     SetFavorite(SetFavoriteParams),
@@ -192,6 +205,9 @@ pub enum ErrorKind {
     NotFound,
     /// Reading or writing local files failed.
     Storage,
+    /// The title can't be played natively (codec, missing keyframe
+    /// index); play it with VLC instead.
+    Unsupported,
 }
 
 #[derive(Debug, Serialize)]
@@ -232,6 +248,8 @@ pub struct Item {
     pub ext: Option<String>,
     /// Catch-up replay is available for this channel.
     pub has_archive: bool,
+    /// The panel category listing it, to open from a search result.
+    pub category_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -316,6 +334,13 @@ pub struct Playback {
     /// Embeds the panel credentials: hand it to the player, never log it.
     pub url: String,
     pub is_live: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RemuxedStream {
+    /// Loopback HLS playlist for AVPlayer. Unguessable, but still never
+    /// logged: it reaches the panel with the account's credentials.
+    pub url: String,
 }
 
 #[derive(Debug, Serialize)]

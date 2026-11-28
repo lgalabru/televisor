@@ -250,7 +250,25 @@ impl Session {
         Ok(batch)
     }
 
-    pub async fn play(&self, params: PlayParams) -> Result<Playback> {
+    pub async fn play(&self, mut params: PlayParams) -> Result<Playback> {
+        // Favorites created before they carried container metadata (and old
+        // history entries) ask to play a movie without an extension. Recover
+        // it from the catalog before constructing the Xtream URL; defaulting
+        // to .mp4 here can point at the wrong resource and also prevents the
+        // Apple apps from selecting the Matroska remuxer.
+        if params.kind == MediaKind::Movie
+            && params
+                .ext
+                .as_deref()
+                .is_none_or(|ext| ext.trim().trim_start_matches('.').is_empty())
+        {
+            params.ext = self
+                .movies()
+                .await?
+                .iter()
+                .find(|movie| movie.stream_id.0 == params.id)
+                .and_then(|movie| movie.container_extension.clone());
+        }
         let (url, is_live) = match params.kind {
             MediaKind::Live => {
                 let live = self.live().await?;
@@ -534,6 +552,7 @@ impl Card for LiveStream {
             added_at: self.added,
             ext: None,
             has_archive: self.tv_archive,
+            category_id: self.category_id.as_ref().map(|id| id.0.clone()),
         }
     }
 
@@ -555,6 +574,7 @@ impl Card for VodStream {
             added_at: self.added,
             ext: self.container_extension.clone(),
             has_archive: false,
+            category_id: self.category_id.as_ref().map(|id| id.0.clone()),
         }
     }
 
@@ -576,6 +596,7 @@ impl Card for xtream::Series {
             added_at: self.last_modified,
             ext: None,
             has_archive: false,
+            category_id: self.category_id.as_ref().map(|id| id.0.clone()),
         }
     }
 

@@ -7,7 +7,6 @@ import SwiftUI
 struct LiveView: View {
     @Environment(AppModel.self) private var model
     @State private var selection: GuideSource = .favorites
-    @State private var isShowingChannels = false
 
     /// Narrowest width that fits sources and channels side by side: the
     /// unfolded screen is about 670 points wide, the cover screen 466.
@@ -43,17 +42,14 @@ struct LiveView: View {
     // MARK: Folded
 
     private var compact: some View {
-        SourceList(selection: selection) { source in
-            selection = source
-            isShowingChannels = true
-        }
-        .navigationTitle("Live TV")
-        .navigationDestination(isPresented: $isShowingChannels) {
-            channels(play: fullScreen)
-                .background(Canvas())
-                .navigationTitle(title(of: selection))
-                .navigationBarTitleDisplayMode(.inline)
-        }
+        CompactSourceList()
+            .navigationTitle("Live TV")
+            .navigationDestination(for: GuideSource.self) { source in
+                channels(of: source, play: fullScreen)
+                    .background(Canvas())
+                    .navigationTitle(title(of: source))
+                    .navigationBarTitleDisplayMode(.inline)
+            }
     }
 
     // MARK: Unfolded
@@ -63,7 +59,7 @@ struct LiveView: View {
         if isLandscape {
             HStack(spacing: 0) {
                 sources
-                channels(play: docked).id(selection)
+                channels(of: selection, play: docked).id(selection)
                 VStack(spacing: 14) {
                     stage
                     Spacer(minLength: 0)
@@ -77,7 +73,7 @@ struct LiveView: View {
                 stage.padding(16)
                 HStack(spacing: 0) {
                     sources
-                    channels(play: docked).id(selection)
+                    channels(of: selection, play: docked).id(selection)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -121,11 +117,11 @@ struct LiveView: View {
     }
 
     @ViewBuilder
-    private func channels(play: @escaping (PlayRequest) -> Void) -> some View {
-        if selection == .sports {
+    private func channels(of source: GuideSource, play: @escaping (PlayRequest) -> Void) -> some View {
+        if source == .sports {
             SportsGuide(onPlay: play)
         } else {
-            ChannelList(source: selection, onPlay: play)
+            ChannelList(source: source, onPlay: play)
         }
     }
 
@@ -177,5 +173,57 @@ private struct NowPlayingBar: View {
             .accessibilityLabel("Stop")
         }
         .buttonStyle(.glass)
+    }
+}
+
+/// The folded phone's list of sources: a plain iOS list, each row pushing
+/// its channels. The sidebar-style `SourceList` suits the wide screens.
+private struct CompactSourceList: View {
+    @Environment(AppModel.self) private var model
+    @State private var categories: [Category]?
+    @State private var failure: BridgeError?
+
+    var body: some View {
+        List {
+            Section {
+                row("Favorites", systemImage: "heart.fill", source: .favorites)
+                row("Sports Today", systemImage: "sportscourt.fill", source: .sports)
+                row("Recently Watched", systemImage: "clock", source: .recent)
+                row("All Channels", systemImage: "square.grid.3x3", source: .all)
+            }
+            if let categories {
+                ForEach(RegionGroups(categories, preferred: model.region).groups) { group in
+                    Section("\(group.region.flag)  \(group.region.name)") {
+                        ForEach(group.categories) { category in
+                            NavigationLink(RegionGroups.shortName(category), value: GuideSource.category(category))
+                        }
+                    }
+                }
+            } else if let failure {
+                Text(failure.explanation).foregroundStyle(.secondary)
+            } else {
+                ProgressView().frame(maxWidth: .infinity)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .task { await load() }
+    }
+
+    private func row(_ title: String, systemImage: String, source: GuideSource) -> some View {
+        NavigationLink(value: source) {
+            Label(title, systemImage: systemImage)
+        }
+    }
+
+    private func load() async {
+        guard categories == nil else { return }
+        do {
+            categories = try await Televisor.categories(.live)
+        } catch let error as BridgeError {
+            failure = error
+        } catch {
+            model.present(error)
+        }
     }
 }

@@ -18,4 +18,4 @@ Authors: <who>  ·  Started: YYYY-MM-DD
 
 | RFD | Title | State |
 |---|---|---|
-| [0001](0001-native-playback-for-mkv.md) | Native playback for Matroska titles | idea |
+| [0001](0001-native-playback-for-mkv.md) | Native playback for Matroska titles | adopted (ADR 0001) |

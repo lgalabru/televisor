@@ -1,6 +1,6 @@
 # RFD 0001: Native playback for Matroska titles
 
-State: idea
+State: adopted (ADR 0001)
 Authors: Ludo Galabru, astra  ·  Started: 2026-11-26
 
 ## Problem
@@ -75,3 +75,48 @@ weeks, most of it on timestamp and edge-case handling.
   it; the gain is the system player's features, not playability.
 
 ## What we learned
+
+### 2026-11-27: probes and prototype (opus)
+
+- **The panel honours `Range`.** `/movie/USER/PASS/ID.mkv` answers 302 to
+  a per-request CDN link, which answers 206 with `Content-Range`. The link
+  can be reused for a while (three ranged reads at 0.2 to 0.35 s each), then
+  answers 509. The proxy caches it and resolves a fresh one on failure.
+- **The panel has no HLS for VOD.** `/movie/USER/PASS/ID.m3u8` answers 551.
+- **97 percent of `.mkv` titles are remuxable.** `ffprobe` on the first 2 MB
+  of 297 random titles (2 more failed): video H.264 261, HEVC Main 10 23,
+  HEVC Main 9, MPEG-4 Part 2 4; audio tracks AAC 528, E-AC-3 168, AC-3 28,
+  DTS 5, TrueHD 2, MP3 1. 288 titles have playable video and only playable
+  audio. 5 carry Dolby Vision.
+- **Audio and subtitle choice matters.** 93 titles (31 percent) have more
+  than one audio track. Subtitle tracks: SRT 1,603, ASS 46, PGS 26,
+  VobSub 3. So the prototype serves every audio track as a rendition and
+  every text subtitle track as WebVTT, not one muxed audio track.
+- **Select audio by bytes, not times.** ffmpeg's muxer stores audio up to
+  ~100 ms after the keyframe cluster that starts the next segment. Taking
+  each segment's frames from its byte range partitions every frame into
+  exactly one segment; selecting by time dropped 8 of 625 E-AC-3 frames on
+  the fixture.
+- **Pure Rust holds.** EBML, Matroska, fMP4 and the HLS playlists took
+  about 3,200 lines and no new dependency. On macOS, `AVPlayer` plays five
+  real titles covering H.264, HEVC Main 10, Dolby Vision 8.1, AAC, AC-3,
+  E-AC-3, 38 audio tracks and 32 subtitle tracks: ready in 0.75 to 1.5 s
+  after a 1 to 2 s open, seeks in 0.3 to 1.2 s, 45 s of 4K without a stall.
+  Subtitles render through `AVPlayerItemLegibleOutput` on time.
+- **File colour tags lie, or are missing.** A Dolby Vision 8.1 title's
+  `Colour` says BT.709, and HDR10 titles often carry no `Colour` at all.
+  The range comes from the Dolby Vision record, then the HEVC SPS's VUI
+  (`transfer_characteristics`), then the container tag; that order agreed
+  with `ffprobe` on five HEVC titles.
+- **Keyframes are not always at a cluster's start.** Some muxers cut
+  clusters by time and write no `CueRelativePosition`: one title put two
+  frames of the previous GOP before each keyframe, and cutting at clusters
+  froze the picture for a quarter second every segment. Segments now split
+  at the keyframe's block, from the index when it says, else found in the
+  data with a 256 KiB look-ahead.
+- **A sweep of 30 random titles:** 26 open in 2 to 7 s and serve every
+  segment requested (first, middle, last; video, audio, subtitles) with
+  clean decodes; 1 is Xvid (`V_MS/VFW/FOURCC`) and goes to VLC; 3 answer
+  HTTP 405 to any request, dead at the panel.
+
+The decision is [ADR 0001](../adr/0001-remux-matroska-to-hls-on-device.md).
